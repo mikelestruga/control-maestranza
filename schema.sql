@@ -65,6 +65,7 @@ create table materiales (
   unidad text not null default 'un',
   costo_unit numeric check (costo_unit >= 0),          -- null = sin dato
   costo_estimado boolean not null default false,
+  kg_unidad numeric check (kg_unidad >= 0),          -- kg por unidad (kg/m, kg/un); null = sin dato
   stock numeric not null default 0,
   stock_min numeric not null default 0,
   activo boolean not null default true
@@ -156,6 +157,7 @@ create table consumos (
   material_id bigint references materiales(id),
   descripcion text,
   cantidad numeric not null check (cantidad > 0),
+  kg numeric check (kg >= 0),
   unidad text,
   costo_unit numeric check (costo_unit >= 0),
   estado_costo text not null default 'pendiente' check (estado_costo in ('real','estimado','pendiente')),
@@ -193,6 +195,7 @@ create table stock_ingresos (
   id bigint generated always as identity primary key,
   material_id bigint not null references materiales(id),
   cantidad numeric not null check (cantidad > 0),
+  kg numeric check (kg >= 0),
   costo_unit numeric check (costo_unit >= 0),
   doc_ref text,
   fecha date not null default current_date,
@@ -296,7 +299,9 @@ begin
       new.costo_unit := m.costo_unit;
       new.estado_costo := case when m.costo_estimado then 'estimado' else 'real' end;
     end if;
+    if new.kg is null and m.kg_unidad is not null then new.kg := round(new.cantidad * m.kg_unidad, 2); end if;
   end if;
+  if new.kg is null and lower(coalesce(new.unidad, '')) = 'kg' then new.kg := new.cantidad; end if;
   if new.costo_unit is null then new.estado_costo := 'pendiente';
   elsif new.estado_costo = 'pendiente' then new.estado_costo := 'real';
   end if;
@@ -341,14 +346,33 @@ end $$;
 create trigger servicio_antes before insert or update on servicios
   for each row execute function servicio_antes();
 
--- Ingreso de stock: suma al inventario y actualiza el último costo
+-- Ingresos a bodega: kg automático si el material tiene kg por unidad
+create or replace function ingreso_antes() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare m materiales%rowtype;
+begin
+  select * into m from materiales where id = new.material_id;
+  if new.kg is null then
+    if m.kg_unidad is not null then new.kg := round(new.cantidad * m.kg_unidad, 2);
+    elsif lower(m.unidad) = 'kg' then new.kg := new.cantidad;
+    end if;
+  end if;
+  return new;
+end $$;
+create trigger ingreso_antes before insert on stock_ingresos
+  for each row execute function ingreso_antes();
+
+-- Suma al stock, actualiza el último costo y, si el material no tenía
+-- kg por unidad, lo aprende del pesaje de este ingreso
 create or replace function ingreso_stock() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
   update materiales
      set stock = stock + new.cantidad,
          costo_unit = coalesce(new.costo_unit, costo_unit),
-         costo_estimado = case when new.costo_unit is not null then false else costo_estimado end
+         costo_estimado = case when new.costo_unit is not null then false else costo_estimado end,
+         kg_unidad = coalesce(kg_unidad, case when new.kg is not null and new.cantidad > 0
+                                              then round(new.kg / new.cantidad, 4) end)
    where id = new.material_id;
   return null;
 end $$;
