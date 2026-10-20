@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Control de Taller</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1C5DA8">
@@ -27,6 +32,10 @@
   --run:#F0953A; --run-soft:#3A2817; --ok:#55BE82; --ok-soft:#173326; --warn:#E3B04F; --warn-soft:#352B14; --bad:#EE6E64; --bad-soft:#3A1E1C;
   --shadow:none; color-scheme:dark }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
 html,body{background:var(--bg);color:var(--ink)}
 body{font-family:var(--f-body);font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-tap-highlight-color:transparent}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
@@ -156,7 +165,8 @@ details>summary::before{content:"▸ ";color:var(--muted)}
 details[open]>summary::before{content:"▾ "}
 .hide-sm{} @media (max-width:560px){.hide-sm,.who .n{display:none}.brand{font-size:.95rem}}
 </style>
-
+</head>
+<body>
 <div id="app"></div>
 <div id="modal"></div>
 
@@ -228,6 +238,21 @@ const otOf = id => byId(S.d.ots, id);
 const opOf = id => byId(S.d.operaciones, id);
 const closed = r => !!(r.fin || r.manual);
 
+/* ---------------------------------------------------------------- materiales y grupos */
+function grupoInfo(g, mats = S.d.materiales) {
+  const all = mats.filter(m => m.activo && m.grupo === g);
+  const cnt = {}; all.forEach(m => cnt[m.unidad] = (cnt[m.unidad] || 0) + 1);
+  const unidad = Object.entries(cnt).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  const items = all.filter(m => m.unidad === unidad), conC = items.filter(m => m.costo_unit != null);
+  const st = sum(conC, m => Math.max(0, +m.stock));
+  const cpp = !conC.length ? null : st > 0 ? sum(conC, m => Math.max(0, +m.stock) * m.costo_unit) / st : sum(conC, m => m.costo_unit) / conC.length;
+  const conK = items.filter(m => m.kg_unidad != null), sk = sum(conK, m => Math.max(0, +m.stock));
+  const kgu = conK.length === items.length && conK.length ? (sk > 0 ? sum(conK, m => Math.max(0, +m.stock) * m.kg_unidad) / sk : sum(conK, m => +m.kg_unidad) / conK.length) : null;
+  return {g, unidad, items, all, stock: sum(items, m => +m.stock), stockMin: sum(items, m => +m.stock_min), cpp, kgu, est: conC.some(m => m.costo_estimado), mixto: all.length !== items.length};
+}
+const grupos = () => [...new Set(S.d.materiales.filter(m => m.activo && m.grupo).map(m => m.grupo))].sort((a, b) => a.localeCompare(b));
+const cppNuevo = (m, cant, cu) => m.costo_unit == null || +m.stock <= 0 ? +cu : Math.round((+m.stock * m.costo_unit + +cant * cu) / (+m.stock + +cant) * 100) / 100;
+
 /* ================================================================ BACKEND DEMO
    Replica en el navegador lo que hacen los triggers de schema.sql */
 const Demo = (() => {
@@ -239,13 +264,13 @@ const Demo = (() => {
   const pk = t => PK[t] || 'id';
   const defaults = {
     hh_registros: () => ({perfil_id: S.me.id, tipo: 'directa', horas: 0, horas_extra: 0, manual: false, extra_manual: false, estado: 'pendiente', creado: new Date().toISOString(), ot_id: null, operacion_id: null, maquina_id: null, inicio: null, fin: null, motivo: null, nota: null, tarifa_id: null, fecha: null}),
-    consumos: () => ({origen: 'bodega', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, material_id: null, descripcion: null, unidad: null, doc_ref: null, kg: null}),
+    consumos: () => ({origen: 'bodega', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, material_id: null, descripcion: null, unidad: null, doc_ref: null, kg: null, grupo: null, reparto: null}),
     servicios: () => ({tipo: 'otro', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, proceso_id: null, descripcion: null, unidad: null, proveedor: null, doc_ref: null, cantidad: 1}),
     stock_ingresos: () => ({fecha: hoy(), registrado_por: S.me.id, costo_unit: null, doc_ref: null, kg: null}),
     asistencia: () => ({perfil_id: S.me.id, entrada: null, salida: null}),
     ots: () => ({estado: 'en_proceso', cantidad: 1, terminadas: 0, kg_cotizados: null, kg_producidos: 0, unidad: 'pza', creada: new Date().toISOString()}),
     produccion: () => ({fecha: hoy(), piezas: 0, nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
-    materiales: () => ({stock: 0, stock_min: 0, activo: true, costo_estimado: false, unidad: 'un', kg_unidad: null}),
+    materiales: () => ({stock: 0, stock_min: 0, activo: true, costo_estimado: false, unidad: 'un', kg_unidad: null, grupo: null}),
     perfiles: () => ({rol: 'operario', activo: true}),
     maquinas: () => ({activa: true, estimada: false, costo_hh: 0}),
     operaciones: () => ({activa: true}),
@@ -275,6 +300,18 @@ const Demo = (() => {
         r.horas_extra = esp ? r.horas : Math.max(0, Math.min(r.horas, prev + r.horas - jor));
       }
     }
+    if (t === 'consumos' && !r.material_id && r.grupo && !r.reparto) {
+      const g = grupoInfo(r.grupo, T.materiales); if (!g.items.length) throw new Error(`El grupo ${r.grupo} no tiene materiales activos`);
+      if (r.unidad == null) r.unidad = g.unidad; if (r.descripcion == null) r.descripcion = r.grupo + ' (grupo)';
+      if (r.costo_unit == null && g.cpp != null) { r.costo_unit = r2(g.cpp); r.estado_costo = g.est ? 'estimado' : 'real'; }
+      if (r.origen === 'bodega') {
+        let rest = +r.cantidad; const rp = [];
+        [...g.items].sort((a, b) => b.stock - a.stock || a.id - b.id).forEach(m => { const tk = Math.min(rest, Math.max(0, +m.stock)); if (tk > 0 && rest > 0) { rp.push({material_id: m.id, cantidad: tk, kg_unidad: m.kg_unidad}); rest -= tk; } });
+        if (rest > 0) { const m = [...g.items].sort((a, b) => b.stock - a.stock || a.id - b.id)[0]; rp.push({material_id: m.id, cantidad: rest, kg_unidad: m.kg_unidad}); }
+        r.reparto = rp;
+        if (r.kg == null && rp.every(e => e.kg_unidad != null)) r.kg = r2(sum(rp, e => e.cantidad * e.kg_unidad));
+      }
+    }
     if (t === 'consumos') { const m = T.materiales.find(x => x.id === r.material_id); costFill(r, m, 'costo_estimado');
       if (r.kg == null || r.kg === '') r.kg = m && m.kg_unidad != null ? r2(r.cantidad * m.kg_unidad) : String(r.unidad || '').toLowerCase() === 'kg' ? +r.cantidad : null; }
     if (t === 'stock_ingresos' && (r.kg == null || r.kg === '')) { const m = T.materiales.find(x => x.id === r.material_id);
@@ -289,12 +326,14 @@ const Demo = (() => {
                  costo_maquina: m ? r.horas * m.costo_hh : 0, estimado: !ta || ta.estimada || !!(m && m.estimada)};
       const i = T.hh_costo.findIndex(x => x.registro_id === r.id); i >= 0 ? T.hh_costo[i] = c : T.hh_costo.push(c);
     }
-    if (t === 'consumos' && r.origen === 'bodega' && r.material_id) {
-      const m = T.materiales.find(x => x.id === r.material_id); if (m) m.stock = r2(m.stock + (op === 'DELETE' ? 1 : -1) * r.cantidad);
+    if (t === 'consumos' && r.origen === 'bodega' && op !== 'UPDATE') {
+      const sg = op === 'DELETE' ? 1 : -1;
+      (r.reparto || (r.material_id ? [{material_id: r.material_id, cantidad: r.cantidad}] : [])).forEach(e => {
+        const m = T.materiales.find(x => x.id === e.material_id); if (m) m.stock = r2(+m.stock + sg * e.cantidad); });
     }
     if (t === 'stock_ingresos' && op === 'INSERT') {
       const m = T.materiales.find(x => x.id === r.material_id);
-      if (m) { m.stock = r2(+m.stock + +r.cantidad); if (r.costo_unit != null) { m.costo_unit = +r.costo_unit; m.costo_estimado = false; }
+      if (m) { if (r.costo_unit != null) { m.costo_unit = cppNuevo(m, r.cantidad, r.costo_unit); m.costo_estimado = false; } m.stock = r2(+m.stock + +r.cantidad);
         if (m.kg_unidad == null && r.kg != null && r.cantidad > 0) m.kg_unidad = Math.round(r.kg / r.cantidad * 1e4) / 1e4; }
     }
     if (t === 'hh_registros' && op === 'DELETE') T.hh_costo = T.hh_costo.filter(x => x.registro_id !== r.id);
@@ -307,7 +346,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 4) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 5) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -327,7 +366,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 4, _seq: {}, produccion: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 5, _seq: {}, produccion: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -355,13 +394,17 @@ const Demo = (() => {
     const mats = add('materiales', [
       {codigo: 'CA-4-40', nombre: 'Cañería 4" SCH40 ASTM A106', unidad: 'm', kg_unidad: 16.07, costo_unit: 18400, stock: 290, stock_min: 30},
       {codigo: 'FL-4-150', nombre: 'Flange SO 4" #150', unidad: 'un', kg_unidad: 7.7, costo_unit: 21900, stock: 92, stock_min: 20},
-      {codigo: 'PL-10', nombre: 'Plancha A36 10 mm', unidad: 'kg', kg_unidad: 1, costo_unit: 1350, stock: 1800, stock_min: 500},
-      {codigo: 'PL-6', nombre: 'Plancha A36 6 mm', unidad: 'kg', kg_unidad: 1, costo_unit: 1380, stock: 950, stock_min: 400},
+      {codigo: 'PL-10', nombre: 'Plancha A36 10 mm', grupo: 'Plancha A36', unidad: 'kg', kg_unidad: 1, costo_unit: 1350, stock: 1800, stock_min: 500},
+      {codigo: 'PL-6', nombre: 'Plancha A36 6 mm', grupo: 'Plancha A36', unidad: 'kg', kg_unidad: 1, costo_unit: 1380, stock: 950, stock_min: 400},
       {codigo: 'BR-4140', nombre: 'Barra SAE 4140 Ø 3"', unidad: 'kg', kg_unidad: 1, costo_unit: 3900, stock: 210, stock_min: 100},
-      {codigo: 'EL-7018', nombre: 'Electrodo E7018 1/8"', unidad: 'kg', kg_unidad: 1, costo_unit: 4300, stock: 85, stock_min: 40},
+      {codigo: 'EL-7018', nombre: 'Electrodo E7018 1/8"', grupo: 'Electrodos', unidad: 'kg', kg_unidad: 1, costo_unit: 4300, stock: 85, stock_min: 40},
       {codigo: 'AL-ER70', nombre: 'Alambre ER70S-6 1,2 mm', unidad: 'kg', kg_unidad: 1, costo_unit: 3100, stock: 120, stock_min: 60, costo_estimado: true},
       {codigo: 'GS-AR', nombre: 'Gas mezcla Ar/CO₂', unidad: 'm³', costo_unit: null, stock: 14, stock_min: 6},
-      {codigo: 'DI-7', nombre: 'Disco de corte 7"', unidad: 'un', costo_unit: 1650, stock: 34, stock_min: 50}]);
+      {codigo: 'EL-6011', nombre: 'Electrodo E6011 1/8"', grupo: 'Electrodos', unidad: 'kg', kg_unidad: 1, costo_unit: 3900, stock: 30, stock_min: 15},
+      {codigo: 'DI-4', nombre: 'Disco de corte 4½"', grupo: 'Discos de corte', unidad: 'un', kg_unidad: 0.12, costo_unit: 890, stock: 60, stock_min: 40},
+      {codigo: 'DI-7', nombre: 'Disco de corte 7"', grupo: 'Discos de corte', unidad: 'un', kg_unidad: 0.32, costo_unit: 1650, stock: 34, stock_min: 30},
+      {codigo: 'DI-9', nombre: 'Disco de corte 9"', grupo: 'Discos de corte', unidad: 'un', kg_unidad: 0.55, costo_unit: 2350, stock: 12, stock_min: 10},
+      {codigo: 'DD-7', nombre: 'Disco de desbaste 7"', grupo: 'Discos de desbaste', unidad: 'un', kg_unidad: 0.45, costo_unit: 2100, stock: 25, stock_min: 20}]);
     const M = c => mats.find(x => x.codigo === c).id;
     const today = hoy();
     const wd = []; for (let i = 0; wd.length < 7; i++) { const f = addDays(today, -i); if (dow(f) !== 0 && dow(f) !== 6) wd.unshift(f); }
@@ -416,8 +459,9 @@ const Demo = (() => {
         }
       });
     });
-    const cons = [[A, 'CA-4-40', 216], [A, 'FL-4-150', 72], [A, 'EL-7018', 22], [A, 'GS-AR', 6], [A, 'DI-7', 30], [B, 'PL-10', 620], [B, 'PL-6', 380], [B, 'AL-ER70', 26], [C, 'BR-4140', 165], [D, 'PL-6', 240], [D, 'EL-7018', 8]];
-    cons.forEach(([ot, c, q], i) => { const r = {...defaults.consumos(), id: nid('consumos'), ot_id: ot.id, material_id: M(c), cantidad: q, fecha: wd[Math.min(i % 5, 4)], registrado_por: 'p-bod'}; before('consumos', r, null); T.consumos.push(r); });
+    const cons = [[A, 'CA-4-40', 216], [A, 'FL-4-150', 72], [A, 'EL-7018', 22], [A, 'GS-AR', 6], ['g', A, 'Discos de corte', 30], [B, 'DD-7', 8], [B, 'PL-10', 620], [B, 'PL-6', 380], [B, 'AL-ER70', 26], [C, 'BR-4140', 165], [D, 'PL-6', 240], [D, 'EL-7018', 8]];
+    cons.forEach((x, i) => { const [ot, c, q] = x[0] === 'g' ? x.slice(1) : x; const r = {...defaults.consumos(), id: nid('consumos'), ot_id: ot.id, cantidad: q, fecha: wd[Math.min(i % 5, 4)], registrado_por: 'p-bod', ...(x[0] === 'g' ? {grupo: c} : {material_id: M(c)})};
+      before('consumos', r, null); T.consumos.push(r); after('consumos', r, 'INSERT'); });
     [[B, 'Planchas antidesgaste Hardox 450 (compra directa)', 'kg', 210, 4850, 'OC 4471'], [A, 'Pernos y empaquetaduras', 'gl', 1, null, '']].forEach(([ot, d, u, q, cu, doc]) => {
       const r = {...defaults.consumos(), id: nid('consumos'), ot_id: ot.id, descripcion: d, unidad: u, cantidad: q, costo_unit: cu, origen: 'compra_directa', doc_ref: doc, fecha: wd[3], registrado_por: 'p-bod'}; before('consumos', r, null); T.consumos.push(r); });
     const pr = n => T.procesos.find(x => x.nombre === n).id;
@@ -426,8 +470,8 @@ const Demo = (() => {
     [[C, 'ensayo', 'Ensayo ultrasonido ejes', 'Laboratorio externo', 12, 'un', 18000, 'Fact. 1182'], [B, 'transporte', 'Flete a faena', 'Transportes ejemplo', 1, 'viaje', null, '']].forEach(([ot, tipo, d, prov, q, u, cu, doc]) => {
       const r = {...defaults.servicios(), id: nid('servicios'), ot_id: ot.id, tipo, descripcion: d, proveedor: prov, cantidad: q, unidad: u, costo_unit: cu, doc_ref: doc, fecha: wd[4], registrado_por: 'p-jefe'}; before('servicios', r, null); T.servicios.push(r); });
     // ingresos a bodega de la semana
-    [[0, 'CA-4-40', 72, 18400, 'Fact. 30551'], [1, 'PL-10', 1200, 1350, 'Fact. 30577'], [2, 'FL-4-150', 24, 21900, 'Fact. 30580'], [3, 'BR-4140', 180, 3900, 'Fact. 30602'], [4, 'PL-6', 600, 1380, 'Fact. 30619'], [5, 'EL-7018', 40, 4300, 'Fact. 30633']]
-      .forEach(([di, c, q, cu, doc]) => { const r = {...defaults.stock_ingresos(), id: nid('stock_ingresos'), material_id: M(c), cantidad: q, costo_unit: cu, doc_ref: doc, fecha: wd[di], registrado_por: 'p-bod'}; before('stock_ingresos', r, null); T.stock_ingresos.push(r); });
+    [[0, 'CA-4-40', 72, 18400, 'Fact. 30551'], [2, 'DI-7', 25, 1790, 'Fact. 30584'], [1, 'PL-10', 1200, 1350, 'Fact. 30577'], [2, 'FL-4-150', 24, 21900, 'Fact. 30580'], [3, 'BR-4140', 180, 3900, 'Fact. 30602'], [4, 'PL-6', 600, 1380, 'Fact. 30619'], [5, 'EL-7018', 40, 4300, 'Fact. 30633']]
+      .forEach(([di, c, q, cu, doc]) => { const r = {...defaults.stock_ingresos(), id: nid('stock_ingresos'), material_id: M(c), cantidad: q, costo_unit: cu, doc_ref: doc, fecha: wd[di], registrado_por: 'p-bod'}; before('stock_ingresos', r, null); T.stock_ingresos.push(r); after('stock_ingresos', r, 'INSERT'); });
     // producción terminada por día
     [[A, 1, 535, 5], [A, 2, 642, 6], [A, 3, 428, 4], [A, 4, 749, 7], [A, 5, 535, 5], [A, 6, 321, 3],
      [C, 3, 25, 2], [C, 5, 37.5, 3], [D, 0, 360, 30], [D, 1, 360, 30]].forEach(([ot, di, k, pz]) => {
@@ -927,7 +971,10 @@ function vBodega() {
   const t = S.ui.bodTab, bajo = S.d.materiales.filter(m => m.activo && +m.stock <= +m.stock_min);
   const tabsH = `<div class="seg" style="max-width:480px">${[['consumo', 'Salida a OT'], ['ingreso', 'Ingreso'], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
   const mats = S.d.materiales.filter(m => m.activo);
-  const matOpts = mats.map(m => `<option value="${m.id}">${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} — ${num(m.stock, 2)} ${esc(m.unidad)}</option>`).join('');
+  const opt = m => `<option value="${m.id}">${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} — ${num(m.stock, 2)} ${esc(m.unidad)}</option>`;
+  const matOptions = conGrupo => grupos().map(g => { const gi = grupoInfo(g);
+      return `<optgroup label="${esc(g)}">${conGrupo ? `<option value="g:${esc(g)}">${esc(g)} · cualquier tamaño — ${num(gi.stock, 2)} ${esc(gi.unidad)}${gi.cpp != null && (isAdmin() || role() === 'bodega') ? ` · promedio ${clp(gi.cpp)}` : ''}</option>` : ''}${mats.filter(m => m.grupo === g).map(opt).join('')}</optgroup>`; }).join('')
+    + (mats.some(m => !m.grupo) ? `<optgroup label="Sin grupo">${mats.filter(m => !m.grupo).map(opt).join('')}</optgroup>` : '');
   let body = '';
   if (t === 'consumo') {
     const rec = [...S.d.consumos].sort((a, b) => b.id - a.id).slice(0, 25);
@@ -935,7 +982,8 @@ function vBodega() {
       <label class="f"><span>OT</span><select name="ot" id="cs-ot" required><option value="">Elegir…</option>${S.d.ots.filter(o => o.estado !== 'entregada').map(o => `<option value="${o.id}">${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
       <div class="seg" role="group"><button type="button" data-act="cs-modo" data-k="bodega" aria-pressed="true">Desde bodega</button><button type="button" data-act="cs-modo" data-k="compra_directa" aria-pressed="false">Compra directa a la OT</button></div>
       <input type="hidden" name="origen" id="cs-origen" value="bodega">
-      <div id="cs-bod" class="f"><span>Material</span><input type="search" id="cs-buscar" placeholder="Buscar por código o nombre" data-input="cs-buscar"><select name="mat" id="cs-mat" size="5">${matOpts}</select></div>
+      <div id="cs-bod" class="f"><span>Material</span><input type="search" id="cs-buscar" placeholder="Buscar por código o nombre" data-input="cs-buscar"><select name="mat" id="cs-mat" size="7">${matOptions(true)}</select>
+        <span class="tiny muted">Elige un tamaño, o el grupo completo si no importa cuál: se valoriza al precio promedio del grupo.</span></div>
       <div id="cs-dir" hidden class="fgrid"><label class="f" style="grid-column:1/-1"><span>Descripción</span><input type="text" name="desc" id="cs-desc"></label>
         <label class="f"><span>Unidad</span><input type="text" name="unidad" id="cs-u" placeholder="kg, m, un"></label>
         <label class="f"><span>Costo unitario $ (si no lo sabes, déjalo vacío)</span><input type="number" name="cu" id="cs-cu" min="0" step="any"></label></div>
@@ -948,20 +996,29 @@ function vBodega() {
   } else if (t === 'ingreso') {
     const rec = [...S.d.stock_ingresos].sort((a, b) => b.id - a.id).slice(0, 25);
     body = `<div class="grid2"><form class="card" data-form="ingreso"><h2>Ingreso a bodega</h2>
-      <div class="f"><span>Material</span><input type="search" id="in-buscar" placeholder="Buscar" data-input="in-buscar"><select name="mat" id="in-mat" size="5" required>${matOpts}</select></div>
+      <div class="f"><span>Material</span><input type="search" id="in-buscar" placeholder="Buscar" data-input="in-buscar"><select name="mat" id="in-mat" size="7" required>${matOptions(false)}</select></div>
       <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cant" id="in-c" min="0" step="any" required data-input="kg-calc"></label>
         <label class="f"><span>Kg <span id="in-kgh" class="tiny"></span></span><input type="number" name="kg" id="in-kg" min="0" step="any" inputmode="decimal" placeholder="Se calcula solo"></label>
-        <label class="f"><span>Costo unitario $</span><input type="number" name="cu" id="in-cu" min="0" step="any"></label>
+        <label class="f"><span>Costo unitario $ <span id="in-cph" class="tiny"></span></span><input type="number" name="cu" id="in-cu" min="0" step="any" data-input="kg-calc"></label>
         <label class="f"><span>OC / factura</span><input type="text" name="doc" id="in-doc"></label></div>
-      <p class="small muted">El costo unitario pasa a ser el costo del material para las siguientes salidas. Los kg se calculan con el peso por unidad del material; si pesaste la carga o la guía trae el peso, escríbelo y se usa ese.</p>
+      <p class="small muted">El costo del material se recalcula como promedio ponderado entre lo que había en bodega y lo que entra. Los kg se calculan con el peso por unidad del material; si pesaste la carga o la guía trae el peso, escríbelo y se usa ese.</p>
       <button class="btn pri xl">Registrar ingreso</button>${isAdmin() ? '' : ''}</form>
       <div class="card"><div class="row between"><h2>Últimos ingresos</h2><span class="small muted">${kg(sum(S.d.stock_ingresos.filter(x => x.fecha >= hoy().slice(0, 8) + '01'), x => x.kg))} este mes</span></div><div class="list">${rec.map(x => { const m = byId(S.d.materiales, x.material_id); return `<div class="item"><div class="t">${esc(m?.nombre)}<div class="small muted">${fechaTxt(x.fecha)}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div><div style="text-align:right"><strong>${num(x.cantidad, 2)} ${esc(m?.unidad)}</strong>${x.kg != null && String(m?.unidad).toLowerCase() !== 'kg' ? `<div class="tiny muted">${kg(x.kg)}</div>` : ''}${x.kg == null ? '<div><span class="chip warn">sin kg</span></div>' : ''}</div></div>`; }).join('') || '<div class="empty">Sin ingresos recientes.</div>'}</div>
       ${isAdmin() ? '<button class="btn ghost" data-act="aj-tab-go" data-k="materiales">Agregar material nuevo al catálogo</button>' : '<p class="small muted">¿El material no está en la lista? Pídele a administración que lo agregue.</p>'}</div></div>`;
   } else {
-    body = `<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Material</th><th class="n">Stock</th><th class="n">Stock kg</th><th class="n">Mínimo</th>${isAdmin() || role() === 'bodega' ? '<th class="n">Costo unit.</th>' : ''}<th></th></tr></thead><tbody>
-      ${S.d.materiales.filter(m => m.activo).sort((a, b) => (+a.stock - +a.stock_min) - (+b.stock - +b.stock_min)).map(m => `<tr><td>${esc(m.codigo || '')}</td><td style="white-space:normal">${esc(m.nombre)}</td><td class="n">${num(m.stock, 2)} ${esc(m.unidad)}</td><td class="n">${kgMov(m, m.stock) != null ? num(kgMov(m, m.stock), 0) : '<span class="muted" title="Sin peso por unidad (Ajustes › Materiales). Los consumibles como gas o discos pueden quedar sin peso.">—</span>'}</td><td class="n">${num(m.stock_min, 2)}</td>
-      ${isAdmin() || role() === 'bodega' ? `<td class="n">${m.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(m.costo_unit)}${m.costo_estimado ? ' <span class="chip est">est.</span>' : ''}</td>` : ''}
-      <td>${+m.stock <= +m.stock_min ? '<span class="chip bad">Reponer</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
+    const verCosto = isAdmin() || role() === 'bodega';
+    const fila = m => `<tr><td>${esc(m.codigo || '')}</td><td style="white-space:normal;${m.grupo ? 'padding-left:22px' : ''}">${esc(m.nombre)}</td><td class="n">${num(m.stock, 2)} ${esc(m.unidad)}</td>
+      <td class="n">${kgMov(m, m.stock) != null ? num(kgMov(m, m.stock), 0) : '<span class="muted" title="Sin peso por unidad (Ajustes › Materiales). Los consumibles como gas o discos pueden quedar sin peso.">—</span>'}</td><td class="n">${num(m.stock_min, 2)}</td>
+      ${verCosto ? `<td class="n">${m.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(m.costo_unit)}${m.costo_estimado ? ' <span class="chip est">est.</span>' : ''}</td><td class="n">${m.costo_unit != null ? clp(Math.max(0, m.stock) * m.costo_unit) : ''}</td>` : ''}
+      <td>${+m.stock <= +m.stock_min ? '<span class="chip bad">Reponer</span>' : ''}</td></tr>`;
+    const act = S.d.materiales.filter(m => m.activo);
+    body = `<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Material</th><th class="n">Stock</th><th class="n">Stock kg</th><th class="n">Mínimo</th>${verCosto ? '<th class="n">Costo prom.</th><th class="n">Valor</th>' : ''}<th></th></tr></thead><tbody>
+      ${grupos().map(g => { const gi = grupoInfo(g), its = act.filter(m => m.grupo === g).sort((a, b) => a.nombre.localeCompare(b.nombre));
+        return `<tr style="background:var(--surface2)"><td></td><td><strong>${esc(g)}</strong> <span class="tiny muted">${its.length} ítems${gi.mixto ? ' · unidades distintas' : ''}</span></td><td class="n"><strong>${num(gi.stock, 2)} ${esc(gi.unidad)}</strong></td><td class="n"><strong>${gi.kgu != null ? num(gi.stock * gi.kgu, 0) : ''}</strong></td><td class="n">${num(gi.stockMin, 2)}</td>
+          ${verCosto ? `<td class="n"><strong>${gi.cpp != null ? clp(gi.cpp) : '—'}</strong></td><td class="n"><strong>${clp(sum(its, m => m.costo_unit != null ? Math.max(0, m.stock) * m.costo_unit : 0))}</strong></td>` : ''}<td></td></tr>${its.map(fila).join('')}`; }).join('')}
+      ${act.filter(m => !m.grupo).length ? `<tr style="background:var(--surface2)"><td></td><td colspan="${verCosto ? 7 : 5}"><strong>Sin grupo</strong></td></tr>${act.filter(m => !m.grupo).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(fila).join('')}` : ''}
+      </tbody></table></div>
+      <p class="small muted">Costo promedio ponderado: se recalcula con cada ingreso. En la fila del grupo, el promedio del grupo según el stock de cada tamaño.</p>
       ${isAdmin() ? '<button class="btn" data-act="csv-stock">Exportar stock</button>' : ''}</div>`;
   }
   const stockKg = sum(S.d.materiales.filter(m => m.activo), m => kgMov(m, Math.max(0, +m.stock)));
@@ -1072,6 +1129,14 @@ function vReportes() {
       <div class="row" style="gap:28px"><div><div class="label">Kg producidos</div><div class="big">${kg(tk)}</div></div><div><div class="label">HH directas por kg</div><div class="big">${tk ? num(hhD / tk, 3) : '—'}</div></div>
         <div><div class="label">Material ingresado a bodega</div><div class="big">${kg(kIng)}</div></div><div><div class="label">Material entregado a OT</div><div class="big">${kg(kEnt)}</div><div class="small muted">${kDir ? `${kg(kDir)} compra directa` : ''}</div></div></div>
       <div class="kv small">${Object.entries(por).sort((a, b) => b[1] - a[1]).map(([id, v]) => `<span><span class="ot">${esc(otOf(+id)?.numero)}</span> ${esc(otOf(+id)?.descripcion || '')}</span><span class="v">${kg(v)}</span>`).join('') || '<span class="muted">Sin producción registrada en el período.</span>'}</div></div>`; })()}
+  ${(() => { const cs = S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h); const por = {};
+    cs.forEach(x => { const m = byId(S.d.materiales, x.material_id); const k = x.grupo || m?.grupo || (m ? m.nombre : x.descripcion + ' (compra directa)');
+      const e = por[k] = por[k] || {cant: 0, u: new Set(), kg: 0, total: 0, n: 0}; e.cant += +x.cantidad; e.u.add(x.unidad); e.kg += +x.kg || 0; e.total += +x.total || 0; e.n++; });
+    const rows = Object.entries(por).sort((a, b) => b[1].total - a[1].total);
+    return `<div class="card"><div class="row between"><h2>Materiales consumidos por grupo</h2><button class="btn" data-act="csv-grupos">Exportar</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Grupo o material</th><th class="n">Salidas</th><th class="n">Cantidad</th><th class="n">Kg</th><th class="n">Costo</th><th class="n">Promedio</th></tr></thead><tbody>
+      ${rows.map(([k, e]) => `<tr><td style="white-space:normal">${esc(k)}</td><td class="n">${e.n}</td><td class="n">${e.u.size === 1 ? `${num(e.cant, 2)} ${esc([...e.u][0] || '')}` : 'varias unidades'}</td><td class="n">${e.kg ? num(e.kg, 0) : '—'}</td><td class="n">${clp(e.total)}</td><td class="n">${e.u.size === 1 && e.cant ? clp(e.total / e.cant) + '/' + esc([...e.u][0] || '') : '—'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Sin salidas en el período.</td></tr>'}
+      </tbody></table></div></div>`; })()}
   <div class="card"><div class="row between"><h2>Costo por OT</h2><button class="btn" data-act="csv-ots">Exportar para el ERP</button></div>
     <div class="tbl-wrap"><table><thead><tr><th>OT</th><th>Cliente</th><th>Estado</th><th class="n">HH</th><th class="n">M. obra</th><th class="n">Máquinas</th><th class="n">Materiales</th><th class="n">Servicios</th><th class="n">GG</th><th class="n">Total</th><th class="n">Cotizado</th><th class="n">Venta</th><th class="n">Margen</th><th class="n">Kg cotiz.</th><th class="n">Kg material</th><th class="n">Kg prod.</th><th class="n">Rend.</th><th class="n">$/kg proy.</th><th class="n">$/kg cotiz.</th></tr></thead><tbody>
     ${S.d.ots.map(o => { const c = costOT(o); return `<tr class="click" data-act="ot-open" data-id="${o.id}"><td><span class="ot">${esc(o.numero)}</span></td><td>${esc(o.cliente)}</td><td>${ESTADOS_OT[o.estado]}</td><td class="n">${num(c.horas)}</td><td class="n">${clp(c.mo + c.extra)}</td><td class="n">${clp(c.maq)}</td><td class="n">${clp(c.mat)}</td><td class="n">${clp(c.serv)}</td><td class="n">${clp(c.gg)}</td><td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${clp(c.pTotal)}</td><td class="n">${clp(c.p?.precio_venta)}</td><td class="n" style="color:${(c.margen || 0) < 0 ? 'var(--bad)' : 'inherit'}">${c.margen == null ? '—' : clp(c.margen)}</td><td class="n">${c.kgCot ? num(c.kgCot, 0) : '—'}</td><td class="n">${num(c.kgMat, 0)}</td><td class="n">${num(c.kgProd, 0)}</td><td class="n">${c.rend != null ? pct(c.rend * 100) : '—'}</td><td class="n">${c.proyKg ? clp(c.proyKg) : '—'}</td><td class="n">${c.pptoKg ? clp(c.pptoKg) : '—'}</td></tr>`; }).join('')}
@@ -1087,8 +1152,9 @@ const CAT = {
     fields: [['nombre', 'Categoría o nombre', 'text'], ['costo_hh', 'Costo hora normal $', 'num'], ['costo_hh_extra', 'Costo hora extra $', 'num'], ['estimada', 'Valor estimado', 'bool']],
     cols: [['nombre', 'Categoría'], [r => clp(r.costo_hh), 'Hora normal', 'n'], [r => clp(r.costo_hh_extra), 'Hora extra', 'n'], [r => r.estimada ? '<span class="chip est">estimado</span>' : '<span class="chip ok">real</span>', 'Dato']]},
   materiales: {t: 'materiales', title: 'Materiales', help: 'Deja el costo vacío si no lo sabes: los consumos quedan como pendientes hasta que lo completes. El peso por unidad convierte metros o unidades a kg; si lo dejas vacío, la app lo aprende del primer ingreso en que escribas los kg.',
-    fields: [['codigo', 'Código', 'text'], ['nombre', 'Nombre', 'text'], ['unidad', 'Unidad', 'text'], ['kg_unidad', 'Kg por unidad (kg/m, kg/un; 1 si la unidad es kg)', 'num'], ['costo_unit', 'Costo unitario $', 'num'], ['costo_estimado', 'Costo estimado', 'bool'], ['stock', 'Stock', 'num'], ['stock_min', 'Stock mínimo', 'num'], ['activo', 'Activo', 'bool']],
-    cols: [['codigo', 'Código'], ['nombre', 'Nombre'], ['unidad', 'Unidad'], [r => r.kg_unidad == null ? (String(r.unidad).toLowerCase() === 'kg' ? '1' : '<span class="chip warn">sin dato</span>') : num(r.kg_unidad, 3), 'Kg/unidad', 'n'], [r => r.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(r.costo_unit) + (r.costo_estimado ? ' <span class="chip est">est.</span>' : ''), 'Costo', 'n'], [r => num(r.stock, 2), 'Stock', 'n']]},
+    fields: [['codigo', 'Código', 'text'], ['nombre', 'Nombre', 'text'], ['grupo', 'Grupo (ej.: Discos de corte; vacío si no tiene)', 'list', () => grupos()], ['unidad', 'Unidad', 'text'], ['kg_unidad', 'Kg por unidad (kg/m, kg/un; 1 si la unidad es kg)', 'num'], ['costo_unit', 'Costo unitario $', 'num'], ['costo_estimado', 'Costo estimado', 'bool'], ['stock', 'Stock', 'num'], ['stock_min', 'Stock mínimo', 'num'], ['activo', 'Activo', 'bool']],
+    sort: (a, b) => (a.grupo || '\uffff').localeCompare(b.grupo || '\uffff') || a.nombre.localeCompare(b.nombre),
+    cols: [['codigo', 'Código'], ['nombre', 'Nombre'], [r => esc(r.grupo || '—'), 'Grupo'], ['unidad', 'Unidad'], [r => r.kg_unidad == null ? (String(r.unidad).toLowerCase() === 'kg' ? '1' : '<span class="chip warn">sin dato</span>') : num(r.kg_unidad, 3), 'Kg/unidad', 'n'], [r => r.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(r.costo_unit) + (r.costo_estimado ? ' <span class="chip est">est.</span>' : ''), 'Costo', 'n'], [r => num(r.stock, 2), 'Stock', 'n']]},
   procesos: {t: 'procesos', title: 'Procesos propios', help: 'Costo por unidad de pintura, arenado y tratamiento térmico hechos en el taller (insumos y energía; las HH se registran aparte).',
     fields: [['nombre', 'Nombre', 'text'], ['tipo', 'Tipo', 'sel', () => Object.entries(TIPOS_SERV)], ['unidad', 'Unidad', 'text'], ['costo_unit', 'Costo por unidad $', 'num'], ['estimada', 'Valor estimado', 'bool']],
     cols: [['nombre', 'Proceso'], [r => TIPOS_SERV[r.tipo], 'Tipo'], ['unidad', 'Unidad'], [r => clp(r.costo_unit) + (r.estimada ? ' <span class="chip est">est.</span>' : ''), 'Costo', 'n']]},
@@ -1107,7 +1173,7 @@ function vAjustes() {
     <label class="f"><span>Colación descontada de la asistencia (minutos)</span><input type="number" name="colacion_min" id="pa-c" step="5" min="0" value="${cfg('colacion_min')}"></label>
     <p class="small muted">Gastos generales: arriendo, administración, consumos básicos, etc. del mes, divididos por el costo directo del mes. Un cambio aquí se aplica a todas las OT.</p>
     <button class="btn pri">Guardar parámetros</button></form>`;
-  const rows = S.d[c.t] || [];
+  const rows = c.sort ? [...(S.d[c.t] || [])].sort(c.sort) : (S.d[c.t] || []);
   return `<h1>Ajustes</h1>${tabs}<div class="card"><div class="row between"><h2>${c.title}</h2><button class="btn pri" data-act="cat-new" data-k="${k}">+ Agregar</button></div>
     ${c.help ? `<p class="small muted">${c.help}</p>` : ''}
     <div class="tbl-wrap"><table><thead><tr>${c.cols.map(([, l, n]) => `<th class="${n || ''}">${l}</th>`).join('')}</tr></thead><tbody>
@@ -1119,6 +1185,7 @@ function sheetCat(k, id) {
   openModal(`${id != null ? 'Editar' : 'Agregar'} · ${c.title}`, `<form data-form="cat"><input type="hidden" name="_k" value="${k}"><input type="hidden" name="_id" value="${esc(id ?? '')}">
     ${c.fields.map(([f, l, ty, opts]) => ty === 'bool' ? `<label class="check"><input type="checkbox" name="${f}" id="c-${f}" ${(id == null ? !/estim/.test(f) : r[f]) ? 'checked' : ''}> ${l}</label>`
       : ty === 'sel' ? `<label class="f"><span>${l}</span><select name="${f}" id="c-${f}">${opts().map(([v, t]) => `<option value="${esc(v)}" ${String(r[f] ?? '') === String(v) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`
+      : ty === 'list' ? `<label class="f"><span>${l}</span><input type="text" name="${f}" id="c-${f}" list="c-${f}-l" value="${esc(r[f] ?? '')}"><datalist id="c-${f}-l">${opts().map(v => `<option value="${esc(v)}">`).join('')}</datalist></label>`
       : `<label class="f"><span>${l}</span><input type="${ty === 'num' ? 'number' : ty}" ${ty === 'num' ? 'step="any"' : ''} name="${f}" id="c-${f}" value="${esc(r[f] ?? '')}" ${['nombre', 'fecha', 'unidad'].includes(f) ? 'required' : ''}></label>`).join('')}
     ${nuevoTrab ? `<div class="fgrid"><label class="f"><span>Usuario para entrar</span><input type="text" name="usuario" id="c-usuario" required autocapitalize="off" placeholder="jperez"></label>
       <label class="f"><span>Clave inicial (mínimo 6)</span><input type="text" name="clave" id="c-clave" minlength="6" required></label></div>
@@ -1205,6 +1272,8 @@ const ACT = {
   'prod-new': el => sheetProduccion(+el.dataset.ot || (S.tab === 'ot' ? S.ui.otId : null)),
   'prod-del': el => { const x = byId(S.d.produccion, +el.dataset.id); openModal('Eliminar registro de producción', `<p>¿Eliminar ${kg(x.kg)} del ${fechaTxt(x.fecha)}? Se descuentan del total de la OT.</p><div class="row"><button class="btn danger" data-act="prod-del-ok" data-id="${x.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`); },
   'prod-del-ok': el => run(() => DB.del('produccion', +el.dataset.id), 'Registro eliminado'),
+  'csv-grupos': () => { const {d, h} = repData(); csv(`materiales-por-grupo-${d}-a-${h}.csv`, ['Fecha', 'OT', 'Grupo', 'Material', 'Origen', 'Cantidad', 'Unidad', 'Kg', 'Costo unitario', 'Total', 'Estado costo'],
+    S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h).map(x => { const m = byId(S.d.materiales, x.material_id); return [x.fecha, otOf(x.ot_id)?.numero, x.grupo || m?.grupo || '', x.descripcion, x.origen, +x.cantidad, x.unidad, x.kg ?? '', x.costo_unit ?? '', +x.total || 0, x.estado_costo]; })); },
   'csv-prod': () => { const {d, h} = repData(); csv(`produccion-${d}-a-${h}.csv`, ['Fecha', 'OT', 'Cliente', 'Descripción', 'Kg', 'Piezas', 'Nota', 'Registrado por'],
     S.d.produccion.filter(x => x.fecha >= d && x.fecha <= h).sort((a, b) => a.fecha.localeCompare(b.fecha)).map(x => { const o = otOf(x.ot_id); return [x.fecha, o?.numero, o?.cliente, o?.descripcion || '', +x.kg, +x.piezas, x.nota || '', perfil(x.registrado_por)?.nombre || '']; })); },
   'sv-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const ext = el.dataset.k === 'externo';
@@ -1227,7 +1296,7 @@ const ACT = {
       rows.map(r => [r.p.nombre, r.p.usuario || '', byId(S.d.tarifas, r.p.tarifa_id)?.nombre || '', r.dias, r.directa, r.retrabajo, r.indirecta, r.improductiva, r.total, r.extra, Math.round(r.costo), r.pend])); },
   'csv-ots': () => csv(`costo-ot-${hoy()}.csv`, ['OT', 'Cliente', 'Descripción', 'Estado', 'Cantidad', 'Unidad', 'HH', 'HH extra', 'Mano de obra', 'Máquinas', 'Materiales', 'Servicios', 'Gastos generales', 'Costo total', 'Costo unitario', 'Cotizado', 'Precio venta', 'Margen', '% estimado', 'Ítems sin costo', 'Kg cotizados', 'Kg material entregado', 'Kg producidos', 'Rendimiento %', 'Costo por kg producido', 'Costo por kg proyectado', 'Costo por kg cotizado', 'Precio por kg', 'HH por kg'],
       S.d.ots.map(o => { const c = costOT(o); return [o.numero, o.cliente, o.descripcion || '', ESTADOS_OT[o.estado], +o.cantidad, o.unidad, c.horas, c.horasExtra, Math.round(c.mo + c.extra), Math.round(c.maq), Math.round(c.mat), Math.round(c.serv), Math.round(c.gg), Math.round(c.total), Math.round(c.unit), Math.round(c.pTotal), +c.p?.precio_venta || 0, c.margen == null ? '' : Math.round(c.margen), Math.round(c.estPct), c.pendientes, c.kgCot || '', c.kgMat, c.kgProd, c.rend == null ? '' : Math.round(c.rend * 1000) / 10, c.costoKg == null ? '' : Math.round(c.costoKg), c.proyKg == null ? '' : Math.round(c.proyKg), c.pptoKg == null ? '' : Math.round(c.pptoKg), c.precioKg == null ? '' : Math.round(c.precioKg), c.hhKg == null ? '' : Math.round(c.hhKg * 1000) / 1000]; })),
-  'csv-stock': () => csv(`stock-${hoy()}.csv`, ['Código', 'Material', 'Unidad', 'Kg por unidad', 'Stock', 'Stock kg', 'Mínimo', 'Costo unitario', 'Valor'], S.d.materiales.map(m => [m.codigo || '', m.nombre, m.unidad, m.kg_unidad ?? '', +m.stock, kgMov(m, m.stock) ?? '', +m.stock_min, m.costo_unit == null ? '' : +m.costo_unit, m.costo_unit == null ? '' : Math.round(m.stock * m.costo_unit)]))
+  'csv-stock': () => csv(`stock-${hoy()}.csv`, ['Código', 'Grupo', 'Material', 'Unidad', 'Kg por unidad', 'Stock', 'Stock kg', 'Mínimo', 'Costo unitario', 'Valor'], S.d.materiales.map(m => [m.codigo || '', m.grupo || '', m.nombre, m.unidad, m.kg_unidad ?? '', +m.stock, kgMov(m, m.stock) ?? '', +m.stock_min, m.costo_unit == null ? '' : +m.costo_unit, m.costo_unit == null ? '' : Math.round(m.stock * m.costo_unit)]))
 };
 function sheetAsisPropia(a) {
   openModal('Hora de salida', `<form data-form="asis-propia"><input type="hidden" name="id" value="${a.id}"><input type="hidden" name="fecha" value="${a.fecha}">
@@ -1301,7 +1370,11 @@ const FORMS = {
     if (fd.get('kg') !== '') row.kg = +fd.get('kg');
     if (!(row.cantidad > 0)) return toast('Indica la cantidad');
     if (dir) { Object.assign(row, {descripcion: fd.get('desc'), unidad: fd.get('unidad') || 'un', costo_unit: cu === '' ? null : +cu}); if (!row.descripcion) return toast('Describe el material'); }
-    else { row.material_id = +fd.get('mat'); if (!row.material_id) return toast('Elige el material'); const m = byId(S.d.materiales, row.material_id); if (+m.stock < row.cantidad) toast(`Ojo: el stock queda negativo (${num(m.stock - row.cantidad, 2)} ${m.unidad})`); }
+    else {
+      const v = String(fd.get('mat') || ''); if (!v) return toast('Elige el material');
+      if (v.startsWith('g:')) { row.grupo = v.slice(2); const gi = grupoInfo(row.grupo); if (gi.stock < row.cantidad) toast(`Ojo: el grupo queda con stock negativo (${num(gi.stock - row.cantidad, 2)} ${gi.unidad})`); }
+      else { row.material_id = +v; const m = byId(S.d.materiales, row.material_id); if (+m.stock < row.cantidad) toast(`Ojo: el stock queda negativo (${num(m.stock - row.cantidad, 2)} ${m.unidad})`); }
+    }
     return run(() => DB.ins('consumos', row), 'Salida de material registrada');
   },
   ingreso(fd) {
@@ -1322,7 +1395,7 @@ const FORMS = {
   async cat(fd) {
     const k = fd.get('_k'), c = CAT[k], id = fd.get('_id');
     const row = {};
-    c.fields.forEach(([f, , ty]) => { const v = fd.get(f); row[f] = ty === 'bool' ? !!v : ty === 'num' ? (v === '' ? null : +v) : ty === 'sel' ? (v === '' ? null : (/_id$/.test(f) ? +v : v)) : (v || null); });
+    c.fields.forEach(([f, , ty]) => { const v = fd.get(f); row[f] = ty === 'bool' ? !!v : ty === 'num' ? (v === '' ? null : +v) : ty === 'sel' ? (v === '' ? null : (/_id$/.test(f) ? +v : v)) : ty === 'list' ? (String(v || '').trim() || null) : (v || null); });
     if (k === 'tarifas' && row.costo_hh_extra == null && row.costo_hh != null) row.costo_hh_extra = Math.round(row.costo_hh * 1.5);
     if (k === 'maquinas' && row.costo_hh == null) row.costo_hh = 0;
     if (k === 'procesos' && row.costo_unit == null) row.costo_unit = 0;
@@ -1366,8 +1439,11 @@ function kgHint() {
     const h = document.getElementById(px + '-kgh'), sel = document.getElementById(selId), c = document.getElementById(px + '-c'); if (!h || !sel || !c) return;
     const dir = px === 'cs' && document.getElementById('cs-origen')?.value === 'compra_directa';
     if (dir) { h.textContent = ''; return; }
-    const m = byId(S.d.materiales, +sel.value), v = kgMov(m, +c.value || 0);
+    const gsel = String(sel.value).startsWith('g:') ? grupoInfo(sel.value.slice(2)) : null;
+    const m = gsel ? {kg_unidad: gsel.kgu, unidad: gsel.unidad} : byId(S.d.materiales, +sel.value), v = kgMov(m, +c.value || 0);
     h.textContent = !m ? '' : v != null ? (c.value ? `≈ ${kg(v)}` : `${num(m.kg_unidad ?? 1, 3)} kg/${m.unidad}`) : '(material sin peso por unidad: escríbelo)';
+    if (px === 'in') { const cp = document.getElementById('in-cph'), cu = document.getElementById('in-cu')?.value, mm = byId(S.d.materiales, +sel.value);
+      if (cp) cp.textContent = !mm ? '' : cu !== '' && +c.value > 0 ? `→ promedio queda ${clp(cppNuevo(mm, +c.value, +cu))}` : mm.costo_unit != null ? `(promedio actual ${clp(mm.costo_unit)})` : ''; }
   });
 }
 document.addEventListener('change', e => { if (['cs-mat', 'in-mat'].includes(e.target.id)) kgHint(); });
@@ -1400,3 +1476,5 @@ async function afterLogin(user) {
   if (data.session) await afterLogin(data.session.user); else render();
 })();
 </script>
+</body>
+</html>
