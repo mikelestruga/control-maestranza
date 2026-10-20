@@ -213,6 +213,7 @@ const elapsedH = (a, b) => (new Date(b || Date.now()) - new Date(a)) / 3.6e6;
 const durTxt = h => { const m = Math.max(0, Math.floor(h * 60)); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
 const byId = (arr, id) => arr.find(x => x.id === id);
 const TIPOS_HH = {directa: 'Directa', retrabajo: 'Retrabajo', indirecta: 'Indirecta', improductiva: 'Improductiva'};
+const TIPOS_DOC = {orden_compra: 'Orden de compra', factura: 'Factura', guia: 'Guía de despacho', cotizacion: 'Cotización', plano: 'Plano', certificado: 'Certificado', otro: 'Otro'};
 const TIPOS_SERV = {pintura: 'Pintura', tratamiento_termico: 'Tratamiento térmico', ensayo: 'Ensayo / END', transporte: 'Transporte', otro: 'Otro'};
 const ESTADOS_OT = {cotizada: 'Cotizada', en_proceso: 'En proceso', terminada: 'Terminada', entregada: 'Entregada'};
 const ROLES = {operario: 'Operario', bodega: 'Bodega', jefe: 'Jefe de taller', admin: 'Administrador'};
@@ -226,7 +227,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -256,6 +257,10 @@ const kgLinea = (l, cant) => l.kg_unidad != null ? r2(cant * l.kg_unidad) : Stri
 const grupos = () => [...new Set(S.d.materiales.filter(m => m.activo && m.grupo).map(m => m.grupo))].sort((a, b) => a.localeCompare(b));
 const cppNuevo = (m, cant, cu) => m.costo_unit == null || +m.stock <= 0 ? +cu : Math.round((+m.stock * m.costo_unit + +cant * cu) / (+m.stock + +cant) * 100) / 100;
 
+const demoArchivos = new Map();
+const limpiarNombre = n => String(n || 'archivo').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-80);
+const pesoTxt = b => !b ? '' : b > 1048576 ? num(b / 1048576, 1) + ' MB' : num(b / 1024, 0) + ' KB';
+
 /* ================================================================ BACKEND DEMO
    Replica en el navegador lo que hacen los triggers de schema.sql */
 const Demo = (() => {
@@ -269,6 +274,7 @@ const Demo = (() => {
     hh_registros: () => ({perfil_id: S.me.id, tipo: 'directa', horas: 0, horas_extra: 0, manual: false, extra_manual: false, estado: 'pendiente', creado: new Date().toISOString(), ot_id: null, operacion_id: null, maquina_id: null, inicio: null, fin: null, motivo: null, nota: null, tarifa_id: null, fecha: null}),
     consumos: () => ({origen: 'bodega', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, material_id: null, descripcion: null, unidad: null, doc_ref: null, kg: null, grupo: null, reparto: null, ot_stock_id: null}),
     compras: () => ({fecha: hoy(), estado: 'pedida', fecha_recepcion: null, neto: null, total: null, nota: null, leida_con_ia: false, creado_por: S.me.id, creado: new Date().toISOString()}),
+    documentos: () => ({compra_id: null, tipo: 'otro', mime: null, tamano: null, nota: null, subido_por: S.me.id, creado: new Date().toISOString()}),
     ot_stock: () => ({traspasado: 0, costo_unit: null, kg_unidad: null, codigo: null, unidad: 'un', creado: new Date().toISOString()}),
     servicios: () => ({tipo: 'otro', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, proceso_id: null, descripcion: null, unidad: null, proveedor: null, doc_ref: null, cantidad: 1}),
     stock_ingresos: () => ({fecha: hoy(), registrado_por: S.me.id, costo_unit: null, doc_ref: null, kg: null}),
@@ -354,7 +360,7 @@ const Demo = (() => {
     if (t === 'ot_stock' && op === 'UPDATE') T.consumos.filter(c => c.ot_stock_id === r.id).forEach(c => {
       c.costo_unit = r.costo_unit; c.estado_costo = r.costo_unit == null ? 'pendiente' : 'real'; c.total = (+c.cantidad || 0) * (+c.costo_unit || 0);
       c.kg = r.kg_unidad != null ? r2(c.cantidad * r.kg_unidad) : String(r.unidad).toLowerCase() === 'kg' ? +c.cantidad : null; });
-    if (t === 'compras' && op === 'DELETE') T.ot_stock = T.ot_stock.filter(l => l.compra_id !== r.id);
+    if (t === 'compras' && op === 'DELETE') { T.ot_stock = T.ot_stock.filter(l => l.compra_id !== r.id); T.documentos.forEach(d => { if (d.compra_id === r.id) d.compra_id = null; }); }
   }
   function totProd(otId) {
     const o = T.ots.find(x => x.id === otId); if (!o) return;
@@ -363,7 +369,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 6) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 7) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -388,6 +394,9 @@ const Demo = (() => {
       l.traspasado = r2(+l.traspasado + a.p_cantidad);
       await api.ins('stock_ingresos', {material_id: a.p_material, cantidad: a.p_cantidad, costo_unit: l.costo_unit, kg: l.kg_unidad != null ? r2(a.p_cantidad * l.kg_unidad) : null, doc_ref: 'Traspaso desde ' + T.ots.find(o => o.id === l.ot_id)?.numero});
     },
+    async subirDoc(file, otId) { const path = `demo/ot-${otId}/${Date.now()}-${limpiarNombre(file.name)}`; demoArchivos.set(path, URL.createObjectURL(file)); return path; },
+    async urlDoc(path) { return demoArchivos.get(path) || null; },
+    async borrarArchivo(path) { demoArchivos.delete(path); },
     async leerOC() { await new Promise(r => setTimeout(r, 900)); return {tipo: 'orden_compra', numero: 'OC-4512', proveedor: 'Aceros ejemplo S.A.', fecha: hoy(), neto: 2156000, total: 2565640,
       items: [{codigo: 'HEB200', descripcion: 'Viga HEB 200 A572 Gr50, tira 12 m', cantidad: 4, unidad: 'tira', precio_unitario_neto: 389000, kg_total: 2932.8},
               {codigo: 'PL12', descripcion: 'Plancha A36 12 mm 1500x6000', cantidad: 2, unidad: 'plancha', precio_unitario_neto: 0, kg_total: 1695.6},
@@ -396,7 +405,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 6, _seq: {}, produccion: [], compras: [], ot_stock: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 7, _seq: {}, produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -504,6 +513,8 @@ const Demo = (() => {
       .forEach(([di, c, q, cu, doc]) => { const r = {...defaults.stock_ingresos(), id: nid('stock_ingresos'), material_id: M(c), cantidad: q, costo_unit: cu, doc_ref: doc, fecha: wd[di], registrado_por: 'p-bod'}; before('stock_ingresos', r, null); T.stock_ingresos.push(r); after('stock_ingresos', r, 'INSERT'); });
     // compra con OC para la OT-2614 (stock del proyecto) y salidas diarias
     { const co = {...defaults.compras(), id: nid('compras'), ot_id: B.id, numero: 'OC-4471', proveedor: 'Aceros ejemplo S.A.', fecha: wd[1], estado: 'recibida', fecha_recepcion: wd[2], neto: 2263500, total: 2693565, creado_por: 'p-bod'}; T.compras.push(co);
+      T.documentos.push({...defaults.documentos(), id: nid('documentos'), ot_id: B.id, compra_id: co.id, tipo: 'orden_compra', nombre: 'OC-4471 Aceros ejemplo.pdf', path: 'demo/ejemplo-oc-4471.pdf', mime: 'application/pdf', tamano: 182000, subido_por: 'p-bod', creado: wd[1]},
+        {...defaults.documentos(), id: nid('documentos'), ot_id: B.id, compra_id: null, tipo: 'plano', nombre: 'Plano chute rev B.pdf', path: 'demo/ejemplo-plano.pdf', mime: 'application/pdf', tamano: 1250000, subido_por: 'p-jefe', creado: wd[0]});
       const ls = [['Plancha antidesgaste Hardox 450 10 mm', 'kg', 620, 4850, 1], ['Perfil UPN 160', 'tira', 6, 96500, 113.4], ['Plancha A36 8 mm', 'kg', 450, 1390, 1], ['Perno hexagonal 5/8" x 2" G8', 'un', 80, 690, 0.2]]
         .map(([d, u, q, cu, kgu]) => { const l = {...defaults.ot_stock(), id: nid('ot_stock'), compra_id: co.id, ot_id: B.id, descripcion: d, unidad: u, cantidad: q, costo_unit: cu, kg_unidad: kgu}; T.ot_stock.push(l); return l; });
       [[0, 210, 2], [1, 3, 3], [0, 180, 4], [2, 200, 4], [3, 40, 5], [1, 1, 5]].forEach(([i, q, di]) => {
@@ -530,8 +541,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock'];
-      const opc = ['produccion', 'compras', 'ot_stock']; // toleran que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos'];
+      const opc = ['produccion', 'compras', 'ot_stock', 'documentos']; // toleran que falte la migración
       const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
@@ -549,6 +560,14 @@ const Cloud = (() => {
     async del(t, id) { const {error} = await sb.from(t).delete().eq(PK[t] || 'id', id); if (error) throw error; },
     async insMany(t, rows) { const {data, error} = await sb.from(t).insert(rows).select(); if (error) throw error; return data; },
     async rpc(name, args) { const {error} = await sb.rpc(name, args); if (error) throw error; },
+    async subirDoc(file, otId) {
+      const path = `ot-${otId}/${Date.now()}-${limpiarNombre(file.name)}`;
+      const {error} = await sb.storage.from('documentos').upload(path, file, {contentType: file.type || 'application/octet-stream', upsert: false});
+      if (error) throw new Error(/bucket/i.test(error.message) ? 'Falta crear la carpeta de documentos en Supabase (ejecuta migracion-documentos.sql).' : 'No se pudo subir el archivo: ' + error.message);
+      return path;
+    },
+    async urlDoc(path) { const {data, error} = await sb.storage.from('documentos').createSignedUrl(path, 3600); if (error) throw error; return data.signedUrl; },
+    async borrarArchivo(path) { await sb.storage.from('documentos').remove([path]); },
     async leerOC(archivo, tipo) {
       const {data, error} = await sb.functions.invoke('leer-oc', {body: {archivo, tipo}});
       if (error) { let code = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; } catch (e) {}
@@ -921,6 +940,7 @@ function vOTDetalle() {
     return `<div class="card"><div class="row between"><h3>Stock del proyecto</h3><button class="btn" data-act="go-stockot" data-id="${o.id}">Ver stock y salidas</button></div>
       <div class="row" style="gap:28px">${adm ? `<div><div class="label">Comprado con OC</div><div class="pill-n">${clp(r.comprado)}</div></div><div><div class="label">Cargado a la OT</div><div class="pill-n">${clp(r.entregado)}</div></div><div><div class="label">Saldo sin usar</div><div class="pill-n">${clp(r.saldo)}</div></div>` : ''}
         <div><div class="label">Saldo en kg</div><div class="pill-n">${kg(r.kgSaldo)}</div></div><div><div class="label">Líneas con saldo</div><div class="pill-n">${r.conSaldo} de ${r.ls.length}</div></div></div></div>`; })()}
+  ${vDocsOT(o)}
   <div class="grid2">
     <div class="card"><div class="row between"><h3>Horas hombre</h3><span class="muted small">${hrs(c.horas)}${+o.ppto_horas ? ` de ${hrs(o.ppto_horas)} cotizadas` : ''}</span></div>
       ${Object.entries(porOp).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><div class="row between small"><span>${esc(k)}</span><span>${hrs(v)}</span></div><div class="bar"><i style="width:${v / maxOp * 100}%"></i></div></div>`).join('') || '<div class="empty">Sin horas registradas.</div>'}
@@ -1111,9 +1131,9 @@ function vStockOT() {
         ${verP ? `<td class="n">${l.costo_unit == null ? '<span class="chip warn">sin precio</span>' : clp(l.costo_unit)}</td>` : ''}
         <td>${sd > 0 ? `<button class="btn ghost" data-act="traspaso" data-id="${l.id}">Traspasar</button>` : '<span class="chip ok">Usado</span>'}</td></tr>`; }).join('')}
     </tbody></table></div>
-    <details><summary class="small">Compras de esta OT (${compras.length})</summary><div class="list" style="margin-top:6px">${compras.map(c => `<div class="item"><div class="t">${esc(c.numero || 'Sin número')} · ${esc(c.proveedor || '')}
+    <details ${compras.length <= 3 ? 'open' : ''}><summary class="small">Compras de esta OT (${compras.length})</summary><div class="list" style="margin-top:6px">${compras.map(c => `<div class="item"><div class="t">${esc(c.numero || 'Sin número')} · ${esc(c.proveedor || '')}
         <div class="small muted">${fechaTxt(c.fecha)}${verP && c.total ? ` · total ${clp(c.total)}` : ''}${c.leida_con_ia ? ' · leída con IA' : ''}</div></div>
-      <div class="row" style="gap:6px">${c.estado === 'pedida' ? `<span class="chip warn">Pedida</span><button class="btn" data-act="compra-recibir" data-id="${c.id}">Marcar recibida</button>` : `<span class="chip ok">Recibida ${c.fecha_recepcion ? fechaTxt(c.fecha_recepcion) : ''}</span>`}
+      <div class="row" style="gap:6px">${docsDe(o.id, c.id).map(docBtn).join('') || `<button class="btn ghost" data-act="doc-new" data-ot="${o.id}" data-compra="${c.id}">Adjuntar documento</button>`}${c.estado === 'pedida' ? `<span class="chip warn">Pedida</span><button class="btn" data-act="compra-recibir" data-id="${c.id}">Marcar recibida</button>` : `<span class="chip ok">Recibida ${c.fecha_recepcion ? fechaTxt(c.fecha_recepcion) : ''}</span>`}
         ${isAdmin() && !S.d.ot_stock.some(l => l.compra_id === c.id && salidasLinea(l).length) ? `<button class="btn ghost danger" data-act="compra-del" data-id="${c.id}">Eliminar</button>` : ''}</div></div>`).join('')}</div></details>
   </div>`;
 }
@@ -1125,15 +1145,17 @@ const lineaHtml = (l = {}) => `<div class="ln card" style="padding:10px;gap:8px;
     <label class="f"><span>Unidad</span><input type="text" class="ln-u" value="${esc(l.unidad || 'un')}" list="unidades"></label>
     <label class="f"><span>Precio neto $</span><input type="number" class="ln-p" step="any" min="0" value="${l.precio_unitario_neto || ''}" inputmode="decimal" placeholder="pendiente"></label>
     <label class="f"><span>Kg total</span><input type="number" class="ln-k" step="any" min="0" value="${l.kg_total ?? ''}" inputmode="decimal" placeholder="opcional"></label></div></div>`;
-function sheetCompra() {
-  const ots = S.d.ots.filter(o => o.estado !== 'entregada');
+function sheetCompra(otPre) {
+  const ots = S.d.ots.filter(o => o.estado !== 'entregada'); const pre = otPre || S.ui.stockOt;
   openModal('Nueva compra para OT', `<form data-form="compra">
-    <label class="f"><span>OT</span><select name="ot" id="co-ot" required><option value="">Elegir…</option>${ots.map(o => `<option value="${o.id}" ${o.id === S.ui.stockOt ? 'selected' : ''}>${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
+    <label class="f"><span>OT</span><select name="ot" id="co-ot" required><option value="">Elegir…</option>${ots.map(o => `<option value="${o.id}" ${o.id === pre ? 'selected' : ''}>${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
     <div class="card" style="box-shadow:none;background:var(--accent-soft);border-color:transparent">
-      <strong>Leer la orden de compra con IA</strong>
-      <span class="small">Sube el PDF o una foto de la OC, factura o guía. La IA llena el proveedor y las líneas; revísalas antes de guardar.</span>
-      <div class="row"><input type="file" id="co-file" accept="application/pdf,image/*" style="flex:1;min-width:0"><button type="button" class="btn pri" data-act="compra-ia">Leer con IA</button></div>
+      <strong>Documento de la compra</strong>
+      <span class="small">Adjunta el PDF o una foto de la OC, factura o guía: queda guardado en la OT. Si quieres, la IA lee el documento y llena las líneas; si no, escríbelas a mano más abajo.</span>
+      <div class="row"><input type="file" id="co-file" accept="application/pdf,image/*" style="flex:1;min-width:0"><button type="button" class="btn" data-act="compra-ia">Leer con IA</button></div>
+      <label class="check small"><input type="checkbox" id="co-guardar" checked> Guardar el documento en la OT</label>
       <div id="co-ia-msg" class="small" role="status"></div></div>
+    <input type="hidden" name="tipo_doc" id="co-tipo" value="orden_compra">
     <div class="fgrid"><label class="f"><span>N° OC / factura / guía</span><input type="text" name="numero" id="co-num"></label>
       <label class="f"><span>Proveedor</span><input type="text" name="proveedor" id="co-prov"></label>
       <label class="f"><span>Fecha</span><input type="date" name="fecha" id="co-f" value="${hoy()}"></label>
@@ -1141,7 +1163,7 @@ function sheetCompra() {
     <input type="hidden" name="neto" id="co-neto"><input type="hidden" name="ia" id="co-ia" value="">
     <div class="seg" role="group" aria-label="Estado"><button type="button" data-act="co-est" data-k="pedida" aria-pressed="true">Pedida (aún no llega)</button><button type="button" data-act="co-est" data-k="recibida" aria-pressed="false">Ya recibida</button></div>
     <input type="hidden" name="estado" id="co-estado" value="pedida">
-    <div class="label">Líneas</div>
+    <div class="label">Líneas (escríbelas a mano o con "Leer con IA")</div>
     <div id="co-lineas" style="display:grid;gap:8px">${lineaHtml()}</div>
     <datalist id="unidades">${['un', 'kg', 'm', 'm2', 'tira', 'plancha', 'barra', 'tubo', 'lt', 'gl', 'juego', 'caja', 'rollo'].map(u => `<option value="${u}">`).join('')}</datalist>
     <button type="button" class="btn ghost" data-act="ln-add">+ Agregar línea</button>
@@ -1192,6 +1214,51 @@ function sheetLinea(id) {
       <label class="f"><span>Kg por ${esc(l.unidad)}</span><input type="number" name="kgu" id="li-k" step="any" min="0" value="${l.kg_unidad ?? ''}"></label></div>
     <p class="small muted">Si cambias el precio (por ejemplo, cuando llega la factura), se actualiza también el costo de las salidas ya hechas a la OT.</p>
     <button class="btn pri">Guardar</button></form>`);
+}
+
+/* ---------------- DOCUMENTOS */
+async function guardarDoc(file, {ot_id, compra_id = null, tipo = 'otro', nota = null}) {
+  if (file.size > 50 * 1024 * 1024) throw new Error('El archivo pesa más de 50 MB');
+  const path = await DB.subirDoc(file, ot_id);
+  try { return await DB.ins('documentos', {ot_id, compra_id, tipo, nota, nombre: file.name || 'documento', path, mime: file.type || null, tamano: file.size}); }
+  catch (e) { await DB.borrarArchivo(path).catch(() => {}); throw e; }
+}
+const docsDe = (otId, compraId) => S.d.documentos.filter(d => d.ot_id === otId && (compraId === undefined || d.compra_id === compraId)).sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
+const docBtn = d => `<button class="btn ghost" style="padding-inline:6px" data-act="doc-ver" data-id="${d.id}" title="${esc(d.nombre)}">Ver ${esc((TIPOS_DOC[d.tipo] || 'documento').toLowerCase())}</button>`;
+function sheetDoc(otId, compraId) {
+  const o = otOf(otId), c = compraId ? byId(S.d.compras, compraId) : null;
+  openModal('Subir documento', `<form data-form="doc"><input type="hidden" name="ot" value="${otId}"><input type="hidden" name="compra" value="${compraId || ''}">
+    <div class="small muted"><span class="ot">${esc(o.numero)}</span> ${c ? `· compra ${esc(c.numero || '')} ${esc(c.proveedor || '')}` : esc(o.descripcion || '')}</div>
+    <label class="f"><span>Tipo</span><select name="tipo" id="dc-t">${Object.entries(TIPOS_DOC).map(([k, l]) => `<option value="${k}" ${(c ? 'orden_compra' : 'plano') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="f"><span>Archivo (PDF, foto, Excel…; máximo 50 MB)</span><input type="file" name="file" id="dc-f" required></label>
+    <label class="f"><span>Nota (opcional)</span><input type="text" name="nota" id="dc-n"></label>
+    <button class="btn pri">Subir</button></form>`);
+}
+async function verDoc(id) {
+  const d = byId(S.d.documentos, id);
+  openModal(d.nombre, `<div class="small muted">${TIPOS_DOC[d.tipo]} · <span class="ot">${esc(otOf(d.ot_id)?.numero)}</span> · ${fechaTxt(ymd(d.creado))}${d.tamano ? ' · ' + pesoTxt(d.tamano) : ''}${perfil(d.subido_por) ? ' · ' + esc(perfil(d.subido_por).nombre) : ''}${d.nota ? '<br>' + esc(d.nota) : ''}</div>
+    <div id="dv-box" class="empty">Cargando…</div>
+    <div class="row"><a class="btn pri" id="dv-link" target="_blank" rel="noopener" hidden>Abrir en pestaña nueva</a>${isAdmin() ? `<button class="btn danger" data-act="doc-del" data-id="${d.id}">Eliminar documento</button>` : ''}</div>`);
+  let url = null; try { url = await DB.urlDoc(d.path); } catch (e) { }
+  const box = document.getElementById('dv-box'), a = document.getElementById('dv-link'); if (!box) return;
+  if (!url) { box.textContent = DEMO ? 'Documento de ejemplo: en la demostración no hay archivo real. Los que subas sí se pueden ver mientras no recargues la página.' : 'No se pudo abrir el archivo.'; return; }
+  a.href = url; a.hidden = false;
+  const mt = String(d.mime || '');
+  if (mt.startsWith('image/')) box.outerHTML = `<img src="${esc(url)}" alt="${esc(d.nombre)}" style="width:100%;border-radius:8px;border:1px solid var(--line)">`;
+  else if (mt.includes('pdf') && matchMedia('(min-width:700px)').matches) box.outerHTML = `<iframe src="${esc(url)}" title="${esc(d.nombre)}" style="width:100%;height:65vh;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe>`;
+  else box.textContent = 'Usa "Abrir en pestaña nueva" para ver o descargar el archivo.';
+}
+function vDocsOT(o) {
+  const compras = S.d.compras.filter(c => c.ot_id === o.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const sueltos = docsDe(o.id).filter(d => !d.compra_id), adm = isAdmin();
+  return `<div class="card"><div class="row between"><h3>Compras y documentos</h3><div class="row"><button class="btn" data-act="doc-new" data-ot="${o.id}">+ Subir documento</button><button class="btn" data-act="compra-new" data-ot="${o.id}">+ Nueva compra</button></div></div>
+    ${compras.length ? `<div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Documento</th><th>Proveedor</th><th class="n">Líneas</th>${adm ? '<th class="n">Total</th>' : ''}<th>Estado</th><th>Archivo</th></tr></thead><tbody>
+      ${compras.map(c => { const ds = docsDe(o.id, c.id), nl = S.d.ot_stock.filter(l => l.compra_id === c.id).length;
+        return `<tr><td>${fechaTxt(c.fecha)}</td><td>${esc(c.numero || '—')}${c.leida_con_ia ? ' <span class="tiny muted">IA</span>' : ''}</td><td style="white-space:normal">${esc(c.proveedor || '')}</td><td class="n">${nl}</td>${adm ? `<td class="n">${c.total ? clp(c.total) : '—'}</td>` : ''}
+          <td>${c.estado === 'recibida' ? '<span class="chip ok">Recibida</span>' : '<span class="chip warn">Pedida</span>'}</td>
+          <td>${ds.map(docBtn).join('') || `<button class="btn ghost" data-act="doc-new" data-ot="${o.id}" data-compra="${c.id}">Adjuntar</button>`}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="small muted">Sin compras con OC para esta OT.</div>'}
+    ${sueltos.length ? `<div class="label">Otros documentos</div><div class="list">${sueltos.map(d => `<div class="item"><div class="t">${esc(d.nombre)}<div class="small muted">${TIPOS_DOC[d.tipo]} · ${fechaTxt(ymd(d.creado))}${d.nota ? ' · ' + esc(d.nota) : ''}</div></div>${docBtn(d).replace(/>Ver [^<]*</, '>Ver<')}</div>`).join('')}</div>` : ''}
+  </div>`;
 }
 
 /* ---------------- RESUMEN (admin) */
@@ -1439,7 +1506,11 @@ const ACT = {
       ...c.servL.map(x => [TIPOS_SERV[x.tipo], x.fecha, x.descripcion, x.proveedor || 'propio', +x.cantidad, x.unidad, '', +x.total, x.estado_costo]),
       ['Gastos generales', '', `${cfg('gg_pct')}% del costo directo`, '', '', '', '', c.gg, '']]); },
   'serv-new': el => sheetServicio(+el.dataset.ot || null),
-  'compra-new': () => sheetCompra(),
+  'compra-new': el => sheetCompra(+el.dataset.ot || null),
+  'doc-new': el => sheetDoc(+el.dataset.ot, +el.dataset.compra || null),
+  'doc-ver': el => verDoc(+el.dataset.id),
+  'doc-del': el => openModal('Eliminar documento', `<p>¿Eliminar este documento? El archivo se borra y no se puede recuperar.</p><div class="row"><button class="btn danger" data-act="doc-del-ok" data-id="${el.dataset.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`),
+  'doc-del-ok': el => { const d = byId(S.d.documentos, +el.dataset.id); run(async () => { await DB.del('documentos', d.id); await DB.borrarArchivo(d.path).catch(() => {}); }, 'Documento eliminado'); },
   'stockot-ot': el => { S.ui.stockOt = +el.dataset.id; render(); },
   'go-stockot': el => { S.ui.stockOt = +el.dataset.id; S.ui.bodTab = 'stockot'; S.tab = 'bodega'; render(); window.scrollTo(0, 0); },
   'ln-add': () => { document.getElementById('co-lineas').insertAdjacentHTML('beforeend', lineaHtml()); },
@@ -1454,7 +1525,7 @@ const ACT = {
       const a = f ? await archivoB64(f) : {};
       const r = await DB.leerOC(a.b64, a.tipo);
       const set = (id, v) => { if (v != null && v !== '') document.getElementById(id).value = v; };
-      set('co-num', r.numero); set('co-prov', r.proveedor); set('co-f', r.fecha); set('co-tot', r.total); set('co-neto', r.neto);
+      set('co-num', r.numero); set('co-prov', r.proveedor); if (TIPOS_DOC[r.tipo]) set('co-tipo', r.tipo); set('co-f', r.fecha); set('co-tot', r.total); set('co-neto', r.neto);
       document.getElementById('co-ia').value = '1';
       document.getElementById('co-lineas').innerHTML = (r.items || []).map(it => lineaHtml({...it, precio_unitario_neto: it.precio_unitario_neto || ''})).join('') || lineaHtml();
       msg.innerHTML = `<strong>${(r.items || []).length} líneas leídas.</strong> Revisa cantidades y precios antes de guardar.${(r.advertencias || []).length ? '<br>' + r.advertencias.map(esc).join('<br>') : ''}`;
@@ -1602,7 +1673,12 @@ const FORMS = {
         fecha_recepcion: est === 'recibida' ? hoy() : null, total: n('total'), neto: n('neto'), leida_con_ia: fd.get('ia') === '1'});
       await DB.insMany('ot_stock', lineas.map(x => ({compra_id: c.id, ot_id: ot, descripcion: x.d, cantidad: x.q, unidad: x.u, costo_unit: x.p === '' || +x.p === 0 ? null : +x.p,
         kg_unidad: x.k !== '' && +x.k > 0 ? Math.round(+x.k / x.q * 1e4) / 1e4 : x.u === 'kg' ? 1 : null})));
-      S.ui.stockOt = ot; S.ui.bodTab = 'stockot';
+      S.ui.stockOt = ot; if (S.tab === 'bodega') S.ui.bodTab = 'stockot';
+      const f = document.getElementById('co-file')?.files[0];
+      if (f && document.getElementById('co-guardar')?.checked) {
+        try { await guardarDoc(f, {ot_id: ot, compra_id: c.id, tipo: fd.get('tipo_doc') || 'orden_compra'}); }
+        catch (e) { setTimeout(() => toast('La compra se guardó, pero el documento no se pudo subir: ' + errTxt(e) + ' Usa "Adjuntar".'), 400); }
+      }
     }, `Compra guardada con ${lineas.length} líneas en el stock de ${otOf(ot).numero}`);
   },
   'salida-dia'(fd) {
@@ -1618,6 +1694,10 @@ const FORMS = {
     if (fd.get('modo') === 'ot') return run(() => DB.ins('consumos', {ot_stock_id: l.id, ot_id: l.ot_id, cantidad: sd, fecha: hoy(), doc_ref: 'Cierre: saldo cargado a la OT', origen: 'stock_ot'}), 'Saldo cargado a la OT');
     const mat = +fd.get('mat'), q = +fd.get('cant'); if (!mat) return toast('Elige el material de bodega'); if (!(q > 0) || q > sd + 1e-4) return toast(`La cantidad debe ser entre 0 y ${num(sd, 2)}`);
     return run(() => DB.rpc('traspasar_a_bodega', {p_linea: l.id, p_material: mat, p_cantidad: q}), 'Saldo traspasado a bodega general');
+  },
+  doc(fd) {
+    const f = fd.get('file'); if (!f || !f.size) return toast('Elige el archivo');
+    return run(() => guardarDoc(f, {ot_id: +fd.get('ot'), compra_id: +fd.get('compra') || null, tipo: fd.get('tipo'), nota: fd.get('nota') || null}), 'Documento guardado en la OT');
   },
   linea(fd) {
     const id = +fd.get('id'), row = {descripcion: fd.get('desc').trim(), kg_unidad: fd.get('kgu') === '' ? null : +fd.get('kgu')};
