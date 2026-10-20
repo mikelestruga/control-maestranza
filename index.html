@@ -1,0 +1,1265 @@
+<title>Control de Taller</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#1C5DA8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: barra superior fija con pestañas por rol; contenido en una columna (celular) que se abre a grilla en computador */
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --surface2:#E4E9EE; --ink:#17202A; --muted:#58646F; --line:#D2D9E0;
+  --accent:#1C5DA8; --accent-ink:#FFFFFF; --accent-soft:#DCE8F6;
+  --run:#C4610A; --run-soft:#FBE9D8; --ok:#1F7A49; --ok-soft:#DDF1E5; --warn:#9A6408; --warn-soft:#F8EDD3; --bad:#B3362E; --bad-soft:#F7DEDB;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:10px; --shadow:0 1px 2px rgba(20,32,44,.06),0 2px 8px rgba(20,32,44,.05);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#11161C; --surface:#19212A; --surface2:#222C37; --ink:#E5EAF0; --muted:#97A3AF; --line:#2E3946;
+  --accent:#62A0EA; --accent-ink:#0D1620; --accent-soft:#1D3048;
+  --run:#F0953A; --run-soft:#3A2817; --ok:#55BE82; --ok-soft:#173326; --warn:#E3B04F; --warn-soft:#352B14; --bad:#EE6E64; --bad-soft:#3A1E1C;
+  --shadow:none; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#11161C; --surface:#19212A; --surface2:#222C37; --ink:#E5EAF0; --muted:#97A3AF; --line:#2E3946;
+  --accent:#62A0EA; --accent-ink:#0D1620; --accent-soft:#1D3048;
+  --run:#F0953A; --run-soft:#3A2817; --ok:#55BE82; --ok-soft:#173326; --warn:#E3B04F; --warn-soft:#352B14; --bad:#EE6E64; --bad-soft:#3A1E1C;
+  --shadow:none; color-scheme:dark }
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:1.5rem} h2{font-size:1.25rem} h3{font-size:1.05rem}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* barra superior */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;padding-block:10px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:1.05rem;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.brand small{display:block;font-family:var(--f-body);font-weight:500;font-size:.72rem;letter-spacing:.02em;text-transform:none;color:var(--muted)}
+.who{margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0}
+.who .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding-bottom:8px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:0;background:transparent;padding:8px 12px;border-radius:8px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
+.tab[aria-current="true"]{background:var(--accent-soft);color:var(--accent)}
+.demo{background:var(--warn-soft);color:var(--warn);font-size:.85rem}
+.demo .wrap{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-block:8px}
+.demo select{width:auto;min-height:0;padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface)}
+
+main.wrap{padding-block:18px 64px;display:grid;gap:16px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.grid2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.grid3{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);min-width:0;display:grid;gap:12px;align-content:start}
+.muted{color:var(--muted)} .small{font-size:.85rem} .tiny{font-size:.75rem}
+.label{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.big{font-family:var(--f-display);font-weight:700;font-size:1.9rem;line-height:1.1}
+.sep{border:0;border-top:1px solid var(--line);margin:0}
+
+/* placa OT */
+.ot{display:inline-flex;align-items:center;font-family:var(--f-display);font-weight:700;letter-spacing:.06em;font-size:.9rem;padding:2px 8px;border:1.5px solid currentColor;border-radius:4px;color:var(--accent);white-space:nowrap}
+
+/* botones */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:9px 14px;border-radius:8px;font-weight:600;cursor:pointer;min-height:40px;text-align:center}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.run{background:var(--run);border-color:var(--run);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--accent);padding-inline:8px}
+.btn.danger{color:var(--bad)}
+.btn.xl{min-height:56px;font-size:1.05rem;padding-inline:18px}
+.btn.block{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.tile{display:grid;gap:4px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:14px;cursor:pointer;min-height:64px}
+.tile:hover{border-color:var(--accent)}
+.tile.sel{border-color:var(--accent);background:var(--accent-soft)}
+.tiles{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr))}
+
+/* chips de estado */
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--muted);white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.run{background:var(--run-soft);color:var(--run)}
+.chip.acc{background:var(--accent-soft);color:var(--accent)}
+.chip.est{background:transparent;border:1px dashed currentColor;color:var(--warn)}
+
+/* tarea en curso */
+.live{border-color:var(--run);background:linear-gradient(0deg,var(--run-soft),var(--run-soft)),var(--surface)}
+.timer{font-family:var(--f-display);font-weight:700;font-size:2.6rem;line-height:1;color:var(--run);letter-spacing:.02em}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--run);display:inline-block;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+
+/* listas */
+.list{display:grid}
+.item{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:10px 0;border-top:1px solid var(--line);align-items:center}
+.item:first-child{border-top:0}
+.item .t{font-weight:600;min-width:0}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--surface2)}
+td.n,th.n{text-align:right}
+tr:last-child td{border-bottom:0}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--surface2)}
+
+/* barras */
+.bar{height:10px;border-radius:5px;background:var(--surface2);overflow:hidden;position:relative}
+.bar>i{position:absolute;inset:0 auto 0 0;border-radius:5px;background:var(--accent)}
+.bar>i.over{background:var(--bad)} .bar>i.warn{background:var(--warn)}
+.bar>b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.stack{display:flex;height:14px;border-radius:5px;overflow:hidden;background:var(--surface2)}
+.stack>i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:.92rem}
+.kv .v{text-align:right;font-weight:600}
+.kv .tot{border-top:1px solid var(--line);padding-top:6px}
+
+/* formularios */
+form{display:grid;gap:12px}
+.f{display:grid;gap:4px;min-width:0}
+.f>span{font-size:.8rem;font-weight:600;color:var(--muted)}
+input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],input[type=search],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-height:44px}
+textarea{min-height:70px;resize:vertical}
+.fgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
+.check{display:flex;gap:8px;align-items:center;font-weight:500}
+.check input{width:20px;height:20px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{flex:1;border:0;background:var(--surface);padding:9px 10px;font-weight:600;cursor:pointer;color:var(--muted);min-width:max-content}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* hoja modal */
+.ov{position:fixed;inset:0;background:rgba(10,16,22,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:min(640px,100%);max-height:92%;overflow:auto;border-radius:16px 16px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:grid;gap:14px;align-content:start}
+@media (min-width:700px){.ov{align-items:center}.sheet{border-radius:16px}}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.x{border:0;background:var(--surface2);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1.1rem;flex:none}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:60;font-weight:600;max-width:calc(100% - 32px)}
+.empty{padding:18px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r)}
+.alert{padding:12px 14px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-weight:500}
+.alert.bad{background:var(--bad-soft);color:var(--bad)}
+.login{max-width:380px;margin:8vh auto;display:grid;gap:16px}
+.pill-n{font-family:var(--f-display);font-weight:700;font-size:1.25rem}
+details>summary{cursor:pointer;font-weight:600;list-style:none}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"▸ ";color:var(--muted)}
+details[open]>summary::before{content:"▾ "}
+.hide-sm{} @media (max-width:560px){.hide-sm{display:none}}
+</style>
+
+<div id="app"></div>
+<div id="modal"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.75.0/dist/umd/supabase.js"></script>
+<script>
+/* =====================================================================
+   CONFIGURACIÓN — completar con los datos del proyecto de Supabase.
+   Si se dejan vacíos, la app funciona en MODO DEMOSTRACIÓN con datos
+   de ejemplo guardados solo en este navegador.
+   ===================================================================== */
+const CONFIG = {
+  SUPABASE_URL: 'https://jzkwhsgquunwbtodgrxx.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_U4TxDp33bdkDt15d5VGGMQ_dUm5l2QL',
+  DOMINIO_USUARIOS: 'taller.local',   // usuario "jperez" entra como jperez@taller.local
+  EMPRESA: 'IMT Ingeniería'
+};
+</script>
+<script>
+'use strict';
+/* ---------------------------------------------------------------- utilidades */
+const TZ = 'America/Santiago';
+const DEMO = !CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY;
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ymd = d => new Date(d).toLocaleDateString('sv-SE', {timeZone: TZ});
+const hoy = () => ymd(Date.now());
+const hhmm = d => d ? new Date(d).toLocaleTimeString('es-CL', {timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false}) : '—';
+const clp = n => (n < 0 ? '−$' : '$') + Math.round(Math.abs(n || 0)).toLocaleString('es-CL');
+const num = (n, d = 1) => (+n || 0).toLocaleString('es-CL', {maximumFractionDigits: d});
+const hrs = n => num(n, 1) + ' h';
+const pct = n => num(n, 0) + '%';
+const r2 = n => Math.round(n * 100) / 100;
+const sum = (a, f) => a.reduce((s, x) => s + (+f(x) || 0), 0);
+const addDays = (f, n) => { const [y, m, d] = f.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n, 12)).toISOString().slice(0, 10); };
+const dow = f => { const [y, m, d] = f.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay(); };
+const fechaTxt = f => { if (!f) return '—'; const [y, m, d] = f.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('es-CL', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}); };
+function tsAt(f, hm) { // fecha + "HH:MM" en hora de Santiago -> ISO
+  const g = new Date(`${f}T${hm}:00Z`);
+  const loc = new Date(g.toLocaleString('sv-SE', {timeZone: TZ}).replace(' ', 'T') + 'Z');
+  return new Date(g.getTime() - (loc - g)).toISOString();
+}
+const elapsedH = (a, b) => (new Date(b || Date.now()) - new Date(a)) / 3.6e6;
+const durTxt = h => { const m = Math.max(0, Math.floor(h * 60)); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+const byId = (arr, id) => arr.find(x => x.id === id);
+const TIPOS_HH = {directa: 'Directa', retrabajo: 'Retrabajo', indirecta: 'Indirecta', improductiva: 'Improductiva'};
+const TIPOS_SERV = {pintura: 'Pintura', tratamiento_termico: 'Tratamiento térmico', ensayo: 'Ensayo / END', transporte: 'Transporte', otro: 'Otro'};
+const ESTADOS_OT = {cotizada: 'Cotizada', en_proceso: 'En proceso', terminada: 'Terminada', entregada: 'Entregada'};
+const ROLES = {operario: 'Operario', bodega: 'Bodega', jefe: 'Jefe de taller', admin: 'Administrador'};
+const MOTIVOS = {
+  indirecta: ['Aseo y orden', 'Traslado de material', 'Mantención de equipos', 'Capacitación', 'Charla de seguridad', 'Otra indirecta'],
+  improductiva: ['Espera de material', 'Espera de instrucciones o planos', 'Máquina detenida', 'Espera de puente grúa', 'Corte de energía', 'Otra espera']
+};
+const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(--muted)', improductiva: 'var(--warn)'};
+
+/* ---------------------------------------------------------------- estado */
+const S = {
+  me: null, tab: null, demoAs: null,
+  d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []},
+  ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', repDesde: null, repHasta: null, ajTab: 'trabajadores'}
+};
+const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
+const role = () => S.me?.rol;
+const isAdmin = () => role() === 'admin';
+const isJefe = () => role() === 'jefe' || role() === 'admin';
+const perfil = id => byId(S.d.perfiles, id);
+const otOf = id => byId(S.d.ots, id);
+const opOf = id => byId(S.d.operaciones, id);
+const closed = r => !!(r.fin || r.manual);
+
+/* ================================================================ BACKEND DEMO
+   Replica en el navegador lo que hacen los triggers de schema.sql */
+const Demo = (() => {
+  const KEY = 'taller-demo-v1';
+  let T = null;
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(T)); } catch (e) {} };
+  const nid = t => (T._seq[t] = (T._seq[t] || 0) + 1);
+  const PK = {config: 'clave', ot_ppto: 'ot_id', dias_especiales: 'fecha', hh_costo: 'registro_id'};
+  const pk = t => PK[t] || 'id';
+  const defaults = {
+    hh_registros: () => ({perfil_id: S.me.id, tipo: 'directa', horas: 0, horas_extra: 0, manual: false, extra_manual: false, estado: 'pendiente', creado: new Date().toISOString(), ot_id: null, operacion_id: null, maquina_id: null, inicio: null, fin: null, motivo: null, nota: null, tarifa_id: null, fecha: null}),
+    consumos: () => ({origen: 'bodega', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, material_id: null, descripcion: null, unidad: null, doc_ref: null}),
+    servicios: () => ({tipo: 'otro', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, proceso_id: null, descripcion: null, unidad: null, proveedor: null, doc_ref: null, cantidad: 1}),
+    stock_ingresos: () => ({fecha: hoy(), registrado_por: S.me.id, costo_unit: null, doc_ref: null}),
+    asistencia: () => ({perfil_id: S.me.id, entrada: null, salida: null}),
+    ots: () => ({estado: 'en_proceso', cantidad: 1, terminadas: 0, unidad: 'pza', creada: new Date().toISOString()}),
+    materiales: () => ({stock: 0, stock_min: 0, activo: true, costo_estimado: false, unidad: 'un'}),
+    perfiles: () => ({rol: 'operario', activo: true}),
+    maquinas: () => ({activa: true, estimada: false, costo_hh: 0}),
+    operaciones: () => ({activa: true}),
+    procesos: () => ({estimada: false, tipo: 'otro'}),
+    tarifas: () => ({estimada: false})
+  };
+  function costFill(r, cat, estField) {
+    if (cat) {
+      if (r.descripcion == null) r.descripcion = cat.nombre;
+      if (r.unidad == null) r.unidad = cat.unidad;
+      if (r.costo_unit == null && cat.costo_unit != null) { r.costo_unit = +cat.costo_unit; r.estado_costo = cat[estField] ? 'estimado' : 'real'; }
+    }
+    if (r.costo_unit == null || r.costo_unit === '') { r.costo_unit = null; r.estado_costo = 'pendiente'; }
+    else if (r.estado_costo === 'pendiente') r.estado_costo = 'real';
+    r.total = (+r.cantidad || 0) * (+r.costo_unit || 0);
+  }
+  function before(t, r, old) {
+    if (t === 'hh_registros') {
+      if (!r.fecha) r.fecha = ymd(r.inicio || Date.now());
+      if (r.tarifa_id == null) r.tarifa_id = T.perfiles.find(p => p.id === r.perfil_id)?.tarifa_id ?? null;
+      if (r.fin && !r.manual && r.inicio) r.horas = r2(elapsedH(r.inicio, r.fin));
+      r.horas = +r.horas || 0; r.horas_extra = +r.horas_extra || 0;
+      if (closed(r) && !r.extra_manual && (!old || !old.fin || r.horas !== +old.horas || r.fecha !== old.fecha)) {
+        const jor = +(T.config.find(c => c.clave === 'jornada_horas')?.valor ?? 8);
+        const prev = sum(T.hh_registros.filter(x => x.perfil_id === r.perfil_id && x.fecha === r.fecha && x.id < r.id && closed(x)), x => x.horas);
+        const esp = dow(r.fecha) === 0 || T.dias_especiales.some(d => d.fecha === r.fecha);
+        r.horas_extra = esp ? r.horas : Math.max(0, Math.min(r.horas, prev + r.horas - jor));
+      }
+    }
+    if (t === 'consumos') costFill(r, T.materiales.find(m => m.id === r.material_id), 'costo_estimado');
+    if (t === 'servicios') { const p = T.procesos.find(x => x.id === r.proceso_id); if (p) r.tipo = p.tipo; costFill(r, p, 'estimada'); }
+  }
+  function after(t, r, op) {
+    if (t === 'hh_registros') {
+      if (!closed(r)) return;
+      const ta = T.tarifas.find(x => x.id === r.tarifa_id), m = T.maquinas.find(x => x.id === r.maquina_id);
+      const c = {registro_id: r.id, costo_hh: ta ? (r.horas - r.horas_extra) * ta.costo_hh : 0, costo_extra: ta ? r.horas_extra * ta.costo_hh_extra : 0,
+                 costo_maquina: m ? r.horas * m.costo_hh : 0, estimado: !ta || ta.estimada || !!(m && m.estimada)};
+      const i = T.hh_costo.findIndex(x => x.registro_id === r.id); i >= 0 ? T.hh_costo[i] = c : T.hh_costo.push(c);
+    }
+    if (t === 'consumos' && r.origen === 'bodega' && r.material_id) {
+      const m = T.materiales.find(x => x.id === r.material_id); if (m) m.stock = r2(m.stock + (op === 'DELETE' ? 1 : -1) * r.cantidad);
+    }
+    if (t === 'stock_ingresos' && op === 'INSERT') {
+      const m = T.materiales.find(x => x.id === r.material_id);
+      if (m) { m.stock = r2(+m.stock + +r.cantidad); if (r.costo_unit != null) { m.costo_unit = +r.costo_unit; m.costo_estimado = false; } }
+    }
+    if (t === 'hh_registros' && op === 'DELETE') T.hh_costo = T.hh_costo.filter(x => x.registro_id !== r.id);
+  }
+  const api = {
+    get ready() { return !!T; },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || !T._v) { T = seed(); save(); } },
+    reset() { T = seed(); save(); },
+    async load() {
+      const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
+      const hh = T.hh_registros.map(r => ({...r, ...(c.get(r.id) ? {costo_hh: c.get(r.id).costo_hh, costo_extra: c.get(r.id).costo_extra, costo_maquina: c.get(r.id).costo_maquina, costo_estimado: c.get(r.id).estimado} : {})}));
+      const out = {}; for (const k of Object.keys(S.d)) out[k] = k === 'hh' ? hh : structuredClone(T[k] || []);
+      return out;
+    },
+    async ins(t, row) { const r = {...(defaults[t]?.() || {}), ...row}; if (pk(t) === 'id' && r.id == null) r.id = t === 'perfiles' ? 'p' + (100 + nid(t)) : nid(t);
+      if (t === 'asistencia' && T.asistencia.some(a => a.perfil_id === r.perfil_id && a.fecha === r.fecha)) throw new Error('Ya hay asistencia para ese día');
+      if (t === 'hh_registros' && !closed(r) && T.hh_registros.some(x => x.perfil_id === r.perfil_id && !closed(x))) throw new Error('Ya tienes una tarea abierta');
+      before(t, r, null); T[t].push(r); after(t, r, 'INSERT'); save(); return r; },
+    async upd(t, id, patch) { const k = pk(t); const i = T[t].findIndex(x => x[k] === id); if (i < 0) throw new Error('No encontrado');
+      const old = T[t][i], r = {...old, ...patch}; before(t, r, old); T[t][i] = r; after(t, r, 'UPDATE'); save(); return r; },
+    async upsert(t, row) { const k = pk(t); return T[t].some(x => x[k] === row[k]) ? api.upd(t, row[k], row) : api.ins(t, row); },
+    async del(t, id) { const k = pk(t); const r = T[t].find(x => x[k] === id); T[t] = T[t].filter(x => x[k] !== id); if (r) after(t, r, 'DELETE'); save(); },
+    async hhQuery() { return null; } // en demo todo está cargado
+  };
+  /* ---------- datos de ejemplo */
+  function seed() {
+    T = {_v: 1, _seq: {}, config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+      tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
+      hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
+    const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
+    const tf = add('tarifas', [
+      {nombre: 'Ayudante', costo_hh: 6200, costo_hh_extra: 9300}, {nombre: 'Armador', costo_hh: 8500, costo_hh_extra: 12750},
+      {nombre: 'Mecánico', costo_hh: 10200, costo_hh_extra: 15300}, {nombre: 'Soldador 3G', costo_hh: 9800, costo_hh_extra: 14700},
+      {nombre: 'Soldador 6G', costo_hh: 11500, costo_hh_extra: 17250}, {nombre: 'Pintor', costo_hh: 7400, costo_hh_extra: 11100, estimada: true},
+      {nombre: 'Jefe de taller', costo_hh: 14000, costo_hh_extra: 21000}]);
+    const T_ = n => tf.find(x => x.nombre === n).id;
+    const ps = add('perfiles', [
+      {id: 'p-admin', nombre: 'Administración', usuario: 'admin', rol: 'admin'},
+      {id: 'p-jefe', nombre: 'Pedro Rojas', usuario: 'projas', rol: 'jefe', tarifa_id: T_('Jefe de taller')},
+      {id: 'p-bod', nombre: 'Ana Vera', usuario: 'avera', rol: 'bodega', tarifa_id: T_('Ayudante')},
+      {id: 'p1', nombre: 'Luis Araya', usuario: 'laraya', tarifa_id: T_('Soldador 6G')},
+      {id: 'p2', nombre: 'Carlos Muñoz', usuario: 'cmunoz', tarifa_id: T_('Soldador 3G')},
+      {id: 'p3', nombre: 'Jorge Soto', usuario: 'jsoto', tarifa_id: T_('Armador')},
+      {id: 'p4', nombre: 'Raúl Díaz', usuario: 'rdiaz', tarifa_id: T_('Mecánico')},
+      {id: 'p5', nombre: 'Diego Fuentes', usuario: 'dfuentes', tarifa_id: T_('Ayudante')},
+      {id: 'p6', nombre: 'Mario Pérez', usuario: 'mperez', tarifa_id: T_('Pintor')}]);
+    const ops = add('operaciones', ['Corte', 'Trazado', 'Armado', 'Soldadura', 'Mecanizado', 'Pintura', 'Tratamiento térmico', 'Montaje', 'Control de calidad', 'Otro'].map(nombre => ({nombre})));
+    const O = n => ops.find(x => x.nombre === n).id;
+    const mq = add('maquinas', [{nombre: 'Torno CNC', costo_hh: 9000}, {nombre: 'Fresadora', costo_hh: 7000}, {nombre: 'Equipo arco sumergido', costo_hh: 4500, estimada: true}, {nombre: 'Oxicorte / plasma', costo_hh: 3500}]);
+    add('procesos', [{nombre: 'Pintura epóxica 2 manos', tipo: 'pintura', unidad: 'm²', costo_unit: 6500}, {nombre: 'Arenado SA 2½', tipo: 'pintura', unidad: 'm²', costo_unit: 4200},
+      {nombre: 'Alivio de tensiones', tipo: 'tratamiento_termico', unidad: 'kg', costo_unit: 650, estimada: true}, {nombre: 'Normalizado', tipo: 'tratamiento_termico', unidad: 'kg', costo_unit: 720, estimada: true}]);
+    const mats = add('materiales', [
+      {codigo: 'CA-4-40', nombre: 'Cañería 4" SCH40 ASTM A106', unidad: 'm', costo_unit: 18400, stock: 64, stock_min: 30},
+      {codigo: 'FL-4-150', nombre: 'Flange SO 4" #150', unidad: 'un', costo_unit: 21900, stock: 18, stock_min: 20},
+      {codigo: 'PL-10', nombre: 'Plancha A36 10 mm', unidad: 'kg', costo_unit: 1350, stock: 1800, stock_min: 500},
+      {codigo: 'PL-6', nombre: 'Plancha A36 6 mm', unidad: 'kg', costo_unit: 1380, stock: 950, stock_min: 400},
+      {codigo: 'BR-4140', nombre: 'Barra SAE 4140 Ø 3"', unidad: 'kg', costo_unit: 3900, stock: 210, stock_min: 100},
+      {codigo: 'EL-7018', nombre: 'Electrodo E7018 1/8"', unidad: 'kg', costo_unit: 4300, stock: 85, stock_min: 40},
+      {codigo: 'AL-ER70', nombre: 'Alambre ER70S-6 1,2 mm', unidad: 'kg', costo_unit: 3100, stock: 120, stock_min: 60, costo_estimado: true},
+      {codigo: 'GS-AR', nombre: 'Gas mezcla Ar/CO₂', unidad: 'm³', costo_unit: null, stock: 14, stock_min: 6},
+      {codigo: 'DI-7', nombre: 'Disco de corte 7"', unidad: 'un', costo_unit: 1650, stock: 34, stock_min: 50}]);
+    const M = c => mats.find(x => x.codigo === c).id;
+    const today = hoy();
+    const wd = []; for (let i = 0; wd.length < 7; i++) { const f = addDays(today, -i); if (dow(f) !== 0 && dow(f) !== 6) wd.unshift(f); }
+    const ots = add('ots', [
+      {numero: 'OT-2611', cliente: 'Minera ejemplo', descripcion: 'Spools cañería 4" SCH40 con flanges, 6 m', cantidad: 40, terminadas: 22, unidad: 'spool', fecha_entrega: addDays(today, 9), ppto_horas: 230, creada: wd[0]},
+      {numero: 'OT-2614', cliente: 'Planta ejemplo', descripcion: 'Chute de traspaso con revestimiento antidesgaste', cantidad: 1, unidad: 'pza', fecha_entrega: addDays(today, 4), ppto_horas: 125, creada: wd[0]},
+      {numero: 'OT-2617', cliente: 'Fundición ejemplo', descripcion: 'Ejes SAE 4140 mecanizados y bonificados', cantidad: 12, terminadas: 5, unidad: 'eje', fecha_entrega: addDays(today, 14), ppto_horas: 95, creada: wd[1]},
+      {numero: 'OT-2609', cliente: 'Minera ejemplo', descripcion: 'Soportes de cañería galvanizados', cantidad: 60, terminadas: 60, unidad: 'pza', estado: 'terminada', fecha_entrega: wd[5], ppto_horas: 50, creada: addDays(today, -20)},
+      {numero: 'OT-2620', cliente: 'Planta ejemplo', descripcion: 'Estanque 5 m³ acero carbono (cotizado, sin iniciar)', cantidad: 1, unidad: 'pza', estado: 'cotizada', ppto_horas: 120, creada: today}]);
+    T.ot_ppto.push({ot_id: ots[0].id, ppto_hh: 1450000, ppto_material: 6400000, ppto_servicios: 1250000, ppto_maquina: 120000, precio_venta: 12800000},
+      {ot_id: ots[1].id, ppto_hh: 780000, ppto_material: 1900000, ppto_servicios: 380000, ppto_maquina: 0, precio_venta: 4600000},
+      {ot_id: ots[2].id, ppto_hh: 720000, ppto_material: 1100000, ppto_servicios: 420000, ppto_maquina: 380000, precio_venta: 3900000},
+      {ot_id: ots[3].id, ppto_hh: 430000, ppto_material: 900000, ppto_servicios: 300000, ppto_maquina: 0, precio_venta: 2200000},
+      {ot_id: ots[4].id, ppto_hh: 1150000, ppto_material: 2600000, ppto_servicios: 650000, ppto_maquina: 0, precio_venta: 6900000});
+    // HH: plan por persona (OT, operación, máquina)
+    const [A, B, C, D] = ots;
+    const plan = {
+      p1: [[A, 'Soldadura'], [B, 'Soldadura']], p2: [[A, 'Soldadura'], [B, 'Soldadura'], [A, 'Armado']],
+      p3: [[A, 'Armado'], [B, 'Armado'], [B, 'Trazado']], p4: [[C, 'Mecanizado', 'Torno CNC'], [C, 'Mecanizado', 'Fresadora']],
+      p5: [[A, 'Corte', 'Oxicorte / plasma'], [B, 'Corte'], ['ind', 'Traslado de material']], p6: [[D, 'Pintura'], [A, 'Pintura']],
+      'p-jefe': [[B, 'Control de calidad'], [A, 'Control de calidad'], ['ind', 'Charla de seguridad']]
+    };
+    let s = 7;
+    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    const H = (f, h) => { const mi = Math.round(h * 60); return tsAt(f, `${String(Math.floor(mi / 60)).padStart(2, '0')}:${String(mi % 60).padStart(2, '0')}`); };
+    const saveMe = S.me; S.me = {id: 'p-admin'};
+    wd.forEach((f, di) => {
+      const isToday = f === today;
+      Object.entries(plan).forEach(([pid, tasks], pi) => {
+        const salida = isToday ? null : (rnd() < .45 ? 19.5 : 18);
+        T.asistencia.push({id: nid('asistencia'), perfil_id: pid, fecha: f, entrada: H(f, 8), salida: salida ? H(f, salida) : null});
+        // w = reloj de trabajo sin colación (13:00–14:00 se salta)
+        const nowC = 8 + elapsedH(H(f, 8));
+        const endW = isToday ? Math.min(nowC <= 13 ? nowC : Math.max(13, nowC - 1), 19) : salida - 1;
+        const clk = w => w < 13 ? w : w + 1;
+        let w = 8, k = 0;
+        while (w < endW - 0.2) {
+          let dur = r2(1.5 + rnd() * 3);
+          if (w < 13 && w + dur > 13) dur = r2(13 - w);
+          if (w + dur > endW) dur = r2(endW - w);
+          const [ot, opn, maq] = tasks[(k + di + pi) % tasks.length];
+          const row = {perfil_id: pid, fecha: f, estado: di < wd.length - 2 ? 'aprobado' : 'pendiente'};
+          if (ot === 'ind') Object.assign(row, {tipo: 'indirecta', motivo: opn});
+          else Object.assign(row, {ot_id: ot.id, operacion_id: O(opn), maquina_id: maq ? mq.find(x => x.nombre === maq).id : null, tipo: rnd() < .04 ? 'retrabajo' : 'directa'});
+          if (rnd() < .06 && ot !== 'ind') Object.assign(row, {tipo: 'improductiva', ot_id: null, operacion_id: null, maquina_id: null, motivo: rnd() < .6 ? 'Espera de material' : 'Espera de puente grúa'});
+          const open = isToday && w + dur >= endW - 0.2;
+          row.inicio = H(f, clk(w)); if (!open) row.fin = H(f, clk(w) + dur);
+          const skip = pid === 'p3' && di === wd.length - 2 && k === 2; // día sin cuadrar a propósito
+          if (!skip) { const r = {...defaults.hh_registros(), ...row, id: nid('hh_registros')}; before('hh_registros', r, null); T.hh_registros.push(r); after('hh_registros', r, 'INSERT'); }
+          w = r2(w + dur); k++;
+          if (open) break;
+        }
+      });
+    });
+    const cons = [[A, 'CA-4-40', 132], [A, 'FL-4-150', 48], [A, 'EL-7018', 22], [A, 'GS-AR', 6], [A, 'DI-7', 30], [B, 'PL-10', 620], [B, 'PL-6', 380], [B, 'AL-ER70', 26], [C, 'BR-4140', 165], [D, 'PL-6', 240], [D, 'EL-7018', 8]];
+    cons.forEach(([ot, c, q], i) => { const r = {...defaults.consumos(), id: nid('consumos'), ot_id: ot.id, material_id: M(c), cantidad: q, fecha: wd[Math.min(i % 5, 4)], registrado_por: 'p-bod'}; before('consumos', r, null); T.consumos.push(r); });
+    [[B, 'Planchas antidesgaste Hardox 450 (compra directa)', 'kg', 210, 4850, 'OC 4471'], [A, 'Pernos y empaquetaduras', 'gl', 1, null, '']].forEach(([ot, d, u, q, cu, doc]) => {
+      const r = {...defaults.consumos(), id: nid('consumos'), ot_id: ot.id, descripcion: d, unidad: u, cantidad: q, costo_unit: cu, origen: 'compra_directa', doc_ref: doc, fecha: wd[3], registrado_por: 'p-bod'}; before('consumos', r, null); T.consumos.push(r); });
+    const pr = n => T.procesos.find(x => x.nombre === n).id;
+    [[A, pr('Arenado SA 2½'), 95], [A, pr('Pintura epóxica 2 manos'), 95], [C, pr('Alivio de tensiones'), 165], [D, pr('Pintura epóxica 2 manos'), 38]].forEach(([ot, p, q], i) => {
+      const r = {...defaults.servicios(), id: nid('servicios'), ot_id: ot.id, proceso_id: p, cantidad: q, fecha: wd[2 + i % 3], registrado_por: 'p-jefe'}; before('servicios', r, null); T.servicios.push(r); });
+    [[C, 'ensayo', 'Ensayo ultrasonido ejes', 'Laboratorio externo', 12, 'un', 18000, 'Fact. 1182'], [B, 'transporte', 'Flete a faena', 'Transportes ejemplo', 1, 'viaje', null, '']].forEach(([ot, tipo, d, prov, q, u, cu, doc]) => {
+      const r = {...defaults.servicios(), id: nid('servicios'), ot_id: ot.id, tipo, descripcion: d, proveedor: prov, cantidad: q, unidad: u, costo_unit: cu, doc_ref: doc, fecha: wd[4], registrado_por: 'p-jefe'}; before('servicios', r, null); T.servicios.push(r); });
+    S.me = saveMe;
+    return T;
+  }
+  return api;
+})();
+
+/* ================================================================ BACKEND SUPABASE */
+const Cloud = (() => {
+  let sb = null;
+  const PK = {config: 'clave', ot_ppto: 'ot_id', dias_especiales: 'fecha'};
+  const tbl = t => t === 'hh' ? 'v_hh' : t;
+  async function all(q) { const out = []; for (let from = 0; ; from += 1000) { const {data, error} = await q().range(from, from + 999); if (error) throw error; out.push(...data); if (data.length < 1000) break; } return out; }
+  return {
+    init() { sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY); return sb; },
+    get sb() { return sb; },
+    async load() {
+      const desde = addDays(hoy(), -62);
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios'];
+      const res = await Promise.all(simple.map(t => all(() => sb.from(t).select('*').order(PK[t] || 'id'))));
+      const out = {}; simple.forEach((t, i) => out[t] = res[i]);
+      const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
+      const [h1, h2, as, si] = await Promise.all([
+        all(() => sb.from('v_hh').select('*').gte('fecha', desde).order('id')),
+        activas.length ? all(() => sb.from('v_hh').select('*').in('ot_id', activas).lt('fecha', desde).order('id')) : [],
+        all(() => sb.from('asistencia').select('*').gte('fecha', desde).order('id')),
+        all(() => sb.from('stock_ingresos').select('*').gte('fecha', desde).order('id'))]);
+      out.hh = [...h1, ...h2]; out.asistencia = as; out.stock_ingresos = si;
+      return out;
+    },
+    async ins(t, row) { const {data, error} = await sb.from(t).insert(row).select().single(); if (error) throw error; return data; },
+    async upd(t, id, patch) { const {data, error} = await sb.from(t).update(patch).eq(PK[t] || 'id', id).select(); if (error) throw error; if (!data?.length) throw new Error('No tienes permiso para modificar este registro'); return data[0]; },
+    async upsert(t, row) { const {data, error} = await sb.from(t).upsert(row).select().single(); if (error) throw error; return data; },
+    async del(t, id) { const {error} = await sb.from(t).delete().eq(PK[t] || 'id', id); if (error) throw error; },
+    async hhQuery({desde, hasta, ot}) { let q = () => { let x = sb.from('v_hh').select('*'); if (desde) x = x.gte('fecha', desde); if (hasta) x = x.lte('fecha', hasta); if (ot) x = x.eq('ot_id', ot); return x.order('id'); }; return all(q); }
+  };
+})();
+const DB = DEMO ? Demo : Cloud;
+
+/* ---------------------------------------------------------------- carga y acciones */
+async function reload() {
+  try {
+    const d = await DB.load();
+    Object.assign(S.d, d);
+    if (DEMO) S.me = {...perfil(S.demoAs || 'p-admin')};
+    else if (S.me) S.me = {...S.me, ...(perfil(S.me.id) || {})};
+  } catch (e) { toast(errTxt(e)); }
+  render();
+}
+async function mergeHH(opts) { // trae horas fuera del rango cargado (OT antiguas, reportes)
+  const rows = await DB.hhQuery(opts); if (!rows) return;
+  const m = new Map(S.d.hh.map(r => [r.id, r])); rows.forEach(r => m.set(r.id, r)); S.d.hh = [...m.values()];
+}
+async function run(fn, okMsg) {
+  try { await fn(); if (okMsg) toast(okMsg); closeModal(); await reload(); }
+  catch (e) { toast(errTxt(e)); }
+}
+function errTxt(e) {
+  const m = e?.message || String(e);
+  if (/row-level security|permission/i.test(m)) return 'No tienes permiso para hacer esto.';
+  if (/un_hh_abierto|tarea abierta/.test(m)) return 'Ya tienes una tarea abierta. Termínala primero.';
+  if (/duplicate key|Ya hay/.test(m)) return 'Ese registro ya existe.';
+  if (/Failed to fetch|NetworkError/i.test(m)) return 'Sin conexión. Revisa la señal e inténtalo de nuevo.';
+  return m;
+}
+let toastT;
+function toast(msg) { let el = document.querySelector('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); document.body.append(el); } el.textContent = msg; clearTimeout(toastT); toastT = setTimeout(() => el.remove(), 3200); }
+
+/* ---------------------------------------------------------------- modal */
+function openModal(title, body, onMount) {
+  document.getElementById('modal').innerHTML = `<div class="ov" data-act="close-ov"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="sheet-h"><h2>${esc(title)}</h2><button class="x" data-act="close" aria-label="Cerrar">✕</button></div>${body}</div></div>`;
+  onMount && onMount(document.querySelector('.sheet'));
+  if (matchMedia('(min-width:700px)').matches) document.querySelector('.sheet input:not([type=hidden]):not([type=checkbox]),.sheet .tile')?.focus?.({preventScroll: true});
+}
+function closeModal() { document.getElementById('modal').innerHTML = ''; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ================================================================ CÁLCULOS */
+function hhDia(pid, f) { return S.d.hh.filter(r => r.perfil_id === pid && r.fecha === f); }
+function asisDia(pid, f) { return S.d.asistencia.find(a => a.perfil_id === pid && a.fecha === f); }
+function horasAsistidas(a) { if (!a?.entrada) return null; const h = elapsedH(a.entrada, a.salida || Date.now()); return Math.max(0, h - (h > 5 ? cfg('colacion_min') / 60 : 0)); }
+function cuadre(pid, f) {
+  const rs = hhDia(pid, f), a = asisDia(pid, f);
+  const reg = sum(rs.filter(closed), r => r.horas) + sum(rs.filter(r => !closed(r)), r => elapsedH(r.inicio));
+  const asi = horasAsistidas(a), abierta = rs.some(r => !closed(r));
+  const diff = asi == null ? null : reg - asi;
+  let st = 'ok', txt = 'Cuadrado';
+  if (!rs.length && !a) { st = 'none'; txt = 'Sin registros'; }
+  else if (a == null) { st = 'warn'; txt = 'Sin asistencia'; }
+  else if (!a.salida && f !== hoy()) { st = 'warn'; txt = 'Sin hora de salida'; }
+  else if (abierta && f !== hoy()) { st = 'bad'; txt = 'Tarea sin cerrar'; }
+  else if (f === hoy() && !a.salida) { st = 'run'; txt = 'En jornada'; }
+  else if (Math.abs(diff) > 0.25) { st = diff < 0 ? 'bad' : 'warn'; txt = diff < 0 ? `Faltan ${hrs(-diff)}` : `Sobran ${hrs(diff)}`; }
+  return {rs, a, reg, asi, diff, st, txt, pend: rs.filter(r => r.estado === 'pendiente').length, extra: sum(rs, r => r.horas_extra)};
+}
+function costOT(ot) {
+  const hh = S.d.hh.filter(r => r.ot_id === ot.id);
+  const hc = hh.filter(closed), open = hh.filter(r => !closed(r));
+  const cons = S.d.consumos.filter(c => c.ot_id === ot.id), serv = S.d.servicios.filter(s => s.ot_id === ot.id);
+  const c = {
+    horas: sum(hc, r => r.horas) + sum(open, r => elapsedH(r.inicio)), horasExtra: sum(hc, r => r.horas_extra),
+    horasRet: sum(hc.filter(r => r.tipo === 'retrabajo'), r => r.horas), horasPend: sum(hc.filter(r => r.estado === 'pendiente'), r => r.horas),
+    mo: sum(hc, r => r.costo_hh), extra: sum(hc, r => r.costo_extra), maq: sum(hc, r => r.costo_maquina),
+    ret: sum(hc.filter(r => r.tipo === 'retrabajo'), r => (+r.costo_hh || 0) + (+r.costo_extra || 0)),
+    mat: sum(cons, x => x.total), servT: {}, serv: sum(serv, x => x.total),
+    pendientes: cons.filter(x => x.estado_costo === 'pendiente').length + serv.filter(x => x.estado_costo === 'pendiente').length + hc.filter(r => r.costo_hh == null && isAdmin()).length,
+    est: sum(hc.filter(r => r.costo_estimado), r => (+r.costo_hh || 0) + (+r.costo_extra || 0) + (+r.costo_maquina || 0)) + sum(cons.filter(x => x.estado_costo === 'estimado'), x => x.total) + sum(serv.filter(x => x.estado_costo === 'estimado'), x => x.total),
+    abiertas: open.length, hh, cons, servL: serv
+  };
+  serv.forEach(s => c.servT[s.tipo] = (c.servT[s.tipo] || 0) + (+s.total || 0));
+  c.directo = c.mo + c.extra + c.maq + c.mat + c.serv;
+  c.gg = c.directo * cfg('gg_pct') / 100; c.total = c.directo + c.gg;
+  c.unit = c.total / (+ot.cantidad || 1);
+  const p = S.d.ot_ppto.find(x => x.ot_id === ot.id);
+  c.p = p; c.pDirecto = p ? +p.ppto_hh + +p.ppto_material + +p.ppto_servicios + +p.ppto_maquina : 0;
+  c.pTotal = c.pDirecto * (1 + cfg('gg_pct') / 100);
+  c.margen = p?.precio_venta ? +p.precio_venta - c.total : null;
+  c.estPct = c.total ? (c.est / c.directo) * 100 : 0;
+  c.avancePiezas = (+ot.terminadas || 0) / (+ot.cantidad || 1);
+  // proyección: costo actual escalado por avance de piezas, si hay piezas terminadas
+  c.proy = c.avancePiezas > 0.05 && c.avancePiezas < 1 ? c.total / c.avancePiezas : null;
+  return c;
+}
+
+/* ================================================================ VISTAS */
+const TABS = {
+  operario: [['dia', 'Mi día']],
+  bodega: [['bodega', 'Bodega'], ['dia', 'Mi día']],
+  jefe: [['dia', 'Mi día'], ['validar', 'Validar horas'], ['ots', 'Órdenes de trabajo'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega']],
+  admin: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes'], ['ajustes', 'Ajustes'], ['dia', 'Mi día']]
+};
+function render() {
+  const app = document.getElementById('app');
+  if (!S.me) { app.innerHTML = vLogin(); return; }
+  if (!S.me.activo && !DEMO) { app.innerHTML = vInactivo(); return; }
+  const tabs = TABS[role()] || TABS.operario;
+  if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
+  const views = {dia: vDia, validar: vValidar, ots: vOTs, ot: vOTDetalle, servicios: vServicios, bodega: vBodega, resumen: vResumen, reportes: vReportes, ajustes: vAjustes};
+  const cur = S.tab === 'ot' ? 'ots' : S.tab;
+  app.innerHTML = `
+  ${DEMO ? `<div class="demo"><div class="wrap"><strong>Modo demostración</strong><span>Datos de ejemplo, guardados solo en este navegador.</span>
+    <label class="row" style="gap:6px">Ver como <select id="demo-as" data-change="demo-as">${S.d.perfiles.filter(p => p.activo).map(p => `<option value="${esc(p.id)}" ${p.id === S.me.id ? 'selected' : ''}>${esc(p.nombre)} · ${ROLES[p.rol]}</option>`).join('')}</select></label>
+    <button class="btn ghost" data-act="demo-reset">Reiniciar datos</button></div></div>` : ''}
+  <header class="top"><div class="wrap"><div class="brand">Control de taller<small>${esc(CONFIG.EMPRESA)}</small></div>
+    <div class="who"><span class="n">${esc(S.me.nombre)}</span><span class="chip acc hide-sm">${ROLES[role()]}</span>
+    <button class="btn ghost" data-act="reload" title="Actualizar datos" aria-label="Actualizar">↻</button>
+    ${DEMO ? '' : '<button class="btn ghost" data-act="logout">Salir</button>'}</div></div>
+    ${tabs.length > 1 ? `<nav class="wrap tabs" aria-label="Secciones">${tabs.map(([k, l]) => `<button class="tab" data-act="tab" data-k="${k}" aria-current="${k === cur}">${l}</button>`).join('')}</nav>` : ''}
+  </header>
+  <main class="wrap">${(views[S.tab] || vDia)()}</main>`;
+  tick();
+}
+function vLogin() {
+  return `<div class="wrap"><form class="card login" data-form="login">
+    <div><div class="brand">Control de taller<small>${esc(CONFIG.EMPRESA)}</small></div></div>
+    <label class="f"><span>Usuario</span><input type="text" id="lg-u" name="u" autocomplete="username" autocapitalize="off" required></label>
+    <label class="f"><span>Clave</span><input type="password" id="lg-p" name="p" autocomplete="current-password" required></label>
+    <button class="btn pri xl">Entrar</button>
+    <p class="small muted">Si olvidaste tu clave, pídele al administrador que la cambie.</p></form></div>`;
+}
+function vInactivo() {
+  return `<div class="wrap"><div class="card login"><h2>Cuenta pendiente de activación</h2>
+  <p>Tu usuario <strong>${esc(S.me.usuario || '')}</strong> está creado, pero el administrador aún no lo activa.</p>
+  <button class="btn" data-act="logout">Salir</button></div></div>`;
+}
+
+/* ---------------- MI DÍA (operarios) */
+function vDia() {
+  const me = S.me.id, f = hoy(), a = asisDia(me, f);
+  const rs = S.d.hh.filter(r => r.perfil_id === me).sort((x, y) => (x.inicio || x.creado || '').localeCompare(y.inicio || y.creado || ''));
+  const open = rs.find(r => !closed(r));
+  const viejaAbierta = open && open.fecha !== f;
+  const deHoy = rs.filter(r => r.fecha === f);
+  const q = cuadre(me, f);
+  const ayer = S.d.asistencia.filter(x => x.perfil_id === me && x.fecha < f && !x.salida).sort((x, y) => y.fecha.localeCompare(x.fecha))[0];
+  return `
+  <div class="row between"><div><div class="label">${fechaTxt(f)}</div><h1>Hola, ${esc(S.me.nombre.split(' ')[0])}</h1></div>
+    ${a?.entrada ? `<div class="small muted" style="text-align:right">Entrada ${hhmm(a.entrada)}${a.salida ? ` · Salida ${hhmm(a.salida)}` : ''}</div>` : ''}</div>
+  ${ayer ? `<div class="alert">No marcaste salida el ${fechaTxt(ayer.fecha)}. <button class="btn ghost" data-act="fix-salida" data-id="${ayer.id}">Indicar hora de salida</button></div>` : ''}
+  ${viejaAbierta ? `<div class="alert bad">Quedó abierta una tarea del ${fechaTxt(open.fecha)}. Indica a qué hora terminaste para que se registren bien las horas.
+     <div class="row" style="margin-top:8px"><input type="time" id="fin-vieja" value="18:00" style="max-width:140px"><button class="btn pri" data-act="cerrar-vieja" data-id="${open.id}">Guardar término</button></div></div>` : ''}
+  ${!a?.entrada ? `<div class="card"><h2>Empezar la jornada</h2><p class="muted">Marca tu entrada para empezar a registrar horas.</p>
+     <button class="btn pri xl block" data-act="entrada">Marcar entrada</button></div>` : ''}
+  ${a?.entrada && !a.salida ? (open && !viejaAbierta ? vTareaViva(open) : `<div class="card"><h2>Sin tarea en curso</h2><p class="muted">Elige la OT en la que vas a trabajar.</p>
+     <button class="btn pri xl block" data-act="iniciar">Iniciar tarea</button></div>`) : ''}
+  ${a?.salida ? `<div class="card"><h2>Jornada cerrada</h2><p class="muted">Marcaste salida a las ${hhmm(a.salida)}. Si te faltó registrar algo, agrégalo a mano.</p></div>` : ''}
+  <div class="card">
+    <div class="row between"><h2>Mis horas de hoy</h2><span class="chip ${q.st === 'ok' ? 'ok' : q.st === 'run' ? 'run' : q.st === 'none' ? '' : q.st}">${q.txt}</span></div>
+    <div class="row" style="gap:24px"><div><div class="label">Registradas</div><div class="pill-n">${hrs(q.reg)}</div></div>
+      <div><div class="label">En el taller</div><div class="pill-n">${q.asi == null ? '—' : hrs(q.asi)}</div></div>
+      ${q.extra ? `<div><div class="label">Horas extra</div><div class="pill-n" style="color:var(--run)">${hrs(q.extra)}</div></div>` : ''}</div>
+    ${deHoy.length ? `<div class="list">${deHoy.map(rItem).join('')}</div>` : '<div class="empty">Aún no registras horas hoy.</div>'}
+    <div class="row">${a?.entrada && !a.salida ? '<button class="btn" data-act="salida">Marcar salida</button>' : ''}
+      <button class="btn ghost" data-act="manual">+ Agregar horas a mano</button></div>
+  </div>
+  ${vSemana(me)}`;
+}
+function rItem(r, attrs = '') {
+  const ot = otOf(r.ot_id), op = opOf(r.operacion_id), mq = byId(S.d.maquinas, r.maquina_id);
+  const title = ot ? `<span class="ot">${esc(ot.numero)}</span> ${esc(op?.nombre || '')}` : esc(r.motivo || TIPOS_HH[r.tipo]);
+  const h = closed(r) ? r.horas : elapsedH(r.inicio);
+  return `<div class="item" ${attrs}><div class="t">${title}
+      <div class="small muted">${r.inicio ? `${hhmm(r.inicio)}–${r.fin ? hhmm(r.fin) : 'en curso'}` : 'Ingreso manual'}${mq ? ` · ${esc(mq.nombre)}` : ''}
+      ${r.tipo !== 'directa' ? ` <span class="chip" style="color:${COL[r.tipo]}">${TIPOS_HH[r.tipo]}</span>` : ''}
+      ${r.estado === 'aprobado' ? ' <span class="chip ok">Aprobada</span>' : ''}${r.manual ? ' <span class="chip">Manual</span>' : ''}</div></div>
+    <div style="text-align:right"><strong>${closed(r) ? hrs(h) : `<span class="dot"></span> ${hrs(h)}`}</strong>${+r.horas_extra >= 0.05 ? `<div class="tiny" style="color:var(--run)">${hrs(r.horas_extra)} extra</div>` : ''}</div></div>`;
+}
+function vTareaViva(r) {
+  const ot = otOf(r.ot_id), op = opOf(r.operacion_id);
+  return `<div class="card live"><div class="row between"><span class="label" style="color:var(--run)"><span class="dot"></span> En curso desde ${hhmm(r.inicio)}</span>
+      ${r.tipo === 'retrabajo' ? '<span class="chip bad">Retrabajo</span>' : ''}</div>
+    <div>${ot ? `<span class="ot">${esc(ot.numero)}</span> <strong>${esc(op?.nombre || '')}</strong><div class="small muted">${esc(ot.cliente)} · ${esc(ot.descripcion || '')}</div>` : `<strong>${esc(r.motivo || TIPOS_HH[r.tipo])}</strong><div class="small muted">${TIPOS_HH[r.tipo]}</div>`}</div>
+    <div class="timer" data-timer="${esc(r.inicio)}">${durTxt(elapsedH(r.inicio))}</div>
+    <div class="fgrid"><button class="btn pri xl" data-act="iniciar">Cambiar de tarea</button><button class="btn xl" data-act="terminar" data-id="${r.id}">Terminar</button></div>
+  </div>`;
+}
+function vSemana(pid) {
+  const dias = []; for (let i = 6; i >= 1; i--) dias.push(addDays(hoy(), -i));
+  const rows = dias.map(f => ({f, q: cuadre(pid, f)})).filter(x => x.q.st !== 'none');
+  if (!rows.length) return '';
+  return `<details class="card"><summary>Días anteriores</summary><div class="list">${rows.map(({f, q}) => `<div class="item"><div class="t">${fechaTxt(f)}<div class="small muted">${hrs(q.reg)} registradas${q.extra ? ` · ${hrs(q.extra)} extra` : ''}</div></div>
+    <span class="chip ${q.st === 'ok' ? 'ok' : q.st}">${q.pend ? (q.st === 'ok' ? 'Por aprobar' : q.txt) : (q.st === 'ok' ? 'Aprobado' : q.txt)}</span></div>`).join('')}</div></details>`;
+}
+function tick() {
+  clearInterval(window._tk);
+  const els = document.querySelectorAll('[data-timer]'); if (!els.length) return;
+  window._tk = setInterval(() => els.forEach(el => el.textContent = durTxt(elapsedH(el.dataset.timer))), 15000);
+}
+function sheetIniciar() {
+  const ots = S.d.ots.filter(o => o.estado === 'en_proceso');
+  openModal('Iniciar tarea', `
+    <div class="label">1 · Elige la OT</div>
+    <div class="tiles" id="ini-ots">${ots.map(o => `<button class="tile" data-act="ini-ot" data-id="${o.id}"><span class="ot">${esc(o.numero)}</span><span class="small">${esc(o.descripcion || o.cliente)}</span></button>`).join('') || '<div class="empty">No hay OT en proceso.</div>'}</div>
+    <div class="label">O registra tiempo fuera de OT</div>
+    <div class="fgrid"><button class="btn" data-act="ini-sin" data-k="indirecta">Indirecta (aseo, traslado…)</button><button class="btn" data-act="ini-sin" data-k="improductiva">Espera / detención</button></div>`);
+}
+function sheetOperacion(otId) {
+  const ot = otOf(otId);
+  const maqs = S.d.maquinas.filter(m => m.activa);
+  openModal(`${ot.numero} · operación`, `
+    <div class="fgrid">
+      <label class="f"><span>Máquina (opcional)</span><select id="ini-maq"><option value="">Sin máquina</option>${maqs.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('')}</select></label>
+      <label class="check" style="align-self:end;min-height:44px"><input type="checkbox" id="ini-ret"> Es retrabajo (corregir algo)</label></div>
+    <div class="label">2 · Toca la operación para empezar</div>
+    <div class="tiles">${S.d.operaciones.filter(o => o.activa).map(o => `<button class="tile" data-act="ini-op" data-ot="${otId}" data-id="${o.id}"><strong>${esc(o.nombre)}</strong></button>`).join('')}</div>`);
+}
+function sheetMotivo(tipo) {
+  openModal(TIPOS_HH[tipo], `<div class="label">Toca el motivo para empezar</div>
+    <div class="tiles">${MOTIVOS[tipo].map(m => `<button class="tile" data-act="ini-mot" data-k="${tipo}" data-m="${esc(m)}"><strong>${esc(m)}</strong></button>`).join('')}</div>`);
+}
+async function iniciar(row) {
+  const me = S.me.id, open = S.d.hh.find(r => r.perfil_id === me && !closed(r));
+  await run(async () => {
+    if (open) await DB.upd('hh_registros', open.id, {fin: new Date().toISOString()});
+    await DB.ins('hh_registros', {perfil_id: me, inicio: new Date().toISOString(), ...row});
+  }, 'Tarea iniciada');
+}
+function sheetManual(pid, fecha, rec) { // operario (pid = yo) o jefe (otro / editar)
+  const ots = S.d.ots.filter(o => o.estado !== 'entregada' || o.id === rec?.ot_id);
+  const jefe = isJefe() && (pid !== S.me.id || rec);
+  const r = rec || {tipo: 'directa', fecha: fecha || hoy()};
+  openModal(rec ? 'Corregir registro' : 'Agregar horas a mano', `<form data-form="manual">
+    <input type="hidden" name="pid" value="${esc(pid)}"><input type="hidden" name="id" value="${rec?.id || ''}">
+    ${pid !== S.me.id ? `<div class="label">${esc(perfil(pid)?.nombre)}</div>` : ''}
+    <div class="seg" role="group" aria-label="Tipo de hora">${Object.entries(TIPOS_HH).map(([k, l]) => `<button type="button" data-act="seg" data-k="${k}" aria-pressed="${r.tipo === k}">${l}</button>`).join('')}</div>
+    <input type="hidden" name="tipo" id="m-tipo" value="${r.tipo}">
+    <div class="fgrid" id="m-ot-row" ${['indirecta', 'improductiva'].includes(r.tipo) ? 'hidden' : ''}>
+      <label class="f"><span>OT</span><select name="ot" id="m-ot"><option value="">Elegir…</option>${ots.map(o => `<option value="${o.id}" ${o.id === r.ot_id ? 'selected' : ''}>${esc(o.numero)} · ${esc(o.cliente)}</option>`).join('')}</select></label>
+      <label class="f"><span>Operación</span><select name="op" id="m-op">${S.d.operaciones.map(o => `<option value="${o.id}" ${o.id === r.operacion_id ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}</select></label>
+      <label class="f"><span>Máquina</span><select name="maq" id="m-maq"><option value="">Sin máquina</option>${S.d.maquinas.map(m => `<option value="${m.id}" ${m.id === r.maquina_id ? 'selected' : ''}>${esc(m.nombre)}</option>`).join('')}</select></label></div>
+    <label class="f" id="m-mot-row" ${['indirecta', 'improductiva'].includes(r.tipo) ? '' : 'hidden'}><span>Motivo</span><input type="text" name="motivo" id="m-mot" list="m-mots" value="${esc(r.motivo || '')}">
+      <datalist id="m-mots">${[...MOTIVOS.indirecta, ...MOTIVOS.improductiva].map(m => `<option value="${esc(m)}">`).join('')}</datalist></label>
+    <div class="fgrid">
+      <label class="f"><span>Fecha</span><input type="date" name="fecha" id="m-fecha" value="${r.fecha}" max="${hoy()}" required></label>
+      ${rec?.inicio ? `<label class="f"><span>Inicio</span><input type="time" name="ini" id="m-ini" value="${hhmm(rec.inicio)}"></label><label class="f"><span>Término</span><input type="time" name="fin" id="m-fin" value="${rec.fin ? hhmm(rec.fin) : ''}"></label>`
+        : `<label class="f"><span>Horas</span><input type="number" name="horas" id="m-horas" step="0.25" min="0.25" max="16" value="${rec?.horas || ''}" required></label>`}
+      ${jefe && rec ? `<label class="f"><span>Horas extra</span><input type="number" name="extra" id="m-extra" step="0.25" min="0" value="${num(rec.horas_extra, 2).replace(',', '.')}"></label>` : ''}
+    </div>
+    <label class="f"><span>Nota (opcional)</span><input type="text" name="nota" id="m-nota" value="${esc(r.nota || '')}"></label>
+    ${pid === S.me.id && !rec ? '<p class="small muted">Las horas ingresadas a mano quedan marcadas para que el jefe de taller las revise.</p>' : ''}
+    <div class="row"><button class="btn pri">Guardar</button>${rec && isJefe() ? `<button type="button" class="btn danger" data-act="hh-del" data-id="${rec.id}">Eliminar registro</button>` : ''}</div>
+  </form>`);
+}
+
+/* ---------------- VALIDAR (jefe) */
+function vValidar() {
+  const f = S.ui.valFecha || hoy();
+  const gente = S.d.perfiles.filter(p => p.activo && p.rol !== 'admin' || S.d.hh.some(r => r.perfil_id === p.id && r.fecha === f));
+  const rows = gente.map(p => ({p, q: cuadre(p.id, f)})).sort((a, b) => a.p.nombre.localeCompare(b.p.nombre));
+  const cuadrados = rows.filter(x => x.q.st === 'ok' && x.q.pend);
+  const problemas = rows.filter(x => ['bad', 'warn'].includes(x.q.st)).length;
+  const pend = sum(rows, x => x.q.pend);
+  return `
+  <div class="row between"><div><div class="label">Cuadratura diaria</div><h1>Validar horas</h1></div>
+    <div class="row"><button class="btn" data-act="val-dia" data-n="-1" aria-label="Día anterior">‹</button>
+      <input type="date" id="val-fecha" data-change="val-fecha" value="${f}" max="${hoy()}" style="width:auto">
+      <button class="btn" data-act="val-dia" data-n="1" aria-label="Día siguiente" ${f >= hoy() ? 'disabled' : ''}>›</button></div></div>
+  <div class="row"><span class="chip ${problemas ? 'bad' : 'ok'}">${problemas} con diferencias</span><span class="chip ${pend ? 'warn' : 'ok'}">${pend} registros por aprobar</span>
+    <span class="chip">${hrs(sum(rows, x => x.q.extra))} extra en el día</span>
+    <button class="btn pri" data-act="aprobar-todos" ${cuadrados.length ? '' : 'disabled'} style="margin-left:auto">Aprobar los ${cuadrados.length} cuadrados</button></div>
+  <p class="small muted">Horas registradas en OT, indirectas y esperas deben sumar lo mismo que las horas en el taller (entrada a salida menos ${cfg('colacion_min')} min de colación).</p>
+  <div class="grid3">${rows.filter(x => x.q.st !== 'none').map(({p, q}) => `
+    <div class="card"><div class="row between"><div><strong>${esc(p.nombre)}</strong><div class="tiny muted">${esc(byId(S.d.tarifas, p.tarifa_id)?.nombre || ROLES[p.rol])}</div></div>
+      <span class="chip ${q.st === 'ok' ? 'ok' : q.st}">${q.txt}</span></div>
+      <div class="kv small"><span class="muted">Asistencia</span><span class="v">${q.a?.entrada ? `${hhmm(q.a.entrada)}–${q.a.salida ? hhmm(q.a.salida) : '…'} · ${hrs(q.asi)}` : '—'}</span>
+        <span class="muted">Registradas</span><span class="v">${hrs(q.reg)}${q.extra ? ` <span style="color:var(--run)">(${hrs(q.extra)} extra)</span>` : ''}</span></div>
+      <div class="list">${q.rs.map(r => rItem(r, `data-act="hh-edit" data-id="${r.id}" style="cursor:pointer" title="Corregir"`)).join('')}</div>
+      <div class="row"><button class="btn ghost" data-act="asis-edit" data-p="${esc(p.id)}">Editar asistencia</button><button class="btn ghost" data-act="hh-add" data-p="${esc(p.id)}">+ Registro</button>
+        ${q.pend ? `<button class="btn pri" style="margin-left:auto" data-act="aprobar" data-p="${esc(p.id)}">Aprobar ${q.pend}</button>` : ''}</div>
+    </div>`).join('') || '<div class="empty">Nadie registró horas este día.</div>'}</div>
+  ${rows.some(x => x.q.st === 'none') ? `<p class="small muted">Sin registros: ${rows.filter(x => x.q.st === 'none').map(x => esc(x.p.nombre)).join(', ')}. <button class="btn ghost" data-act="asis-add">Registrar asistencia</button></p>` : ''}`;
+}
+function sheetAsis(pid, f) {
+  const a = asisDia(pid, f);
+  openModal('Asistencia', `<form data-form="asis"><input type="hidden" name="pid" value="${esc(pid)}"><input type="hidden" name="fecha" value="${f}"><input type="hidden" name="id" value="${a?.id || ''}">
+    ${pid ? `<div class="label">${esc(perfil(pid)?.nombre)} · ${fechaTxt(f)}</div>` : `<label class="f"><span>Trabajador</span><select name="pid2" id="as-p">${S.d.perfiles.filter(p => p.activo).map(p => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('')}</select></label>`}
+    <div class="fgrid"><label class="f"><span>Entrada</span><input type="time" name="ent" id="as-e" value="${a?.entrada ? hhmm(a.entrada) : '08:00'}" required></label>
+    <label class="f"><span>Salida</span><input type="time" name="sal" id="as-s" value="${a?.salida ? hhmm(a.salida) : ''}"></label></div>
+    <button class="btn pri">Guardar</button></form>`);
+}
+
+/* ---------------- OT */
+function vOTs() {
+  const filt = S.ui.otFiltro;
+  const ots = S.d.ots.filter(o => filt === 'todas' || (filt === 'activas' ? ['en_proceso', 'cotizada'].includes(o.estado) : ['terminada', 'entregada'].includes(o.estado)))
+    .sort((a, b) => (a.estado === 'en_proceso' ? 0 : 1) - (b.estado === 'en_proceso' ? 0 : 1) || (a.fecha_entrega || '9').localeCompare(b.fecha_entrega || '9'));
+  return `<div class="row between"><h1>Órdenes de trabajo</h1><button class="btn pri" data-act="ot-new">+ Nueva OT</button></div>
+  <div class="seg" style="max-width:420px">${[['activas', 'Activas'], ['cerradas', 'Terminadas'], ['todas', 'Todas']].map(([k, l]) => `<button data-act="ot-filtro" data-k="${k}" aria-pressed="${filt === k}">${l}</button>`).join('')}</div>
+  <div class="grid3">${ots.map(otCard).join('') || '<div class="empty">No hay OT en este filtro.</div>'}</div>`;
+}
+function otCard(o) {
+  const c = costOT(o), ph = +o.ppto_horas || 0, ratio = ph ? c.horas / ph : 0;
+  const atras = o.fecha_entrega && o.fecha_entrega < hoy() && ['en_proceso', 'cotizada'].includes(o.estado);
+  const ratioC = c.pTotal ? c.total / c.pTotal : 0;
+  return `<button class="card tile" data-act="ot-open" data-id="${o.id}" style="gap:10px">
+    <div class="row between"><span class="ot">${esc(o.numero)}</span><span class="chip ${o.estado === 'en_proceso' ? 'acc' : o.estado === 'cotizada' ? '' : 'ok'}">${ESTADOS_OT[o.estado]}</span></div>
+    <div><strong>${esc(o.descripcion || '')}</strong><div class="small muted">${esc(o.cliente)} · ${num(o.cantidad, 0)} ${esc(o.unidad)}${o.fecha_entrega ? ` · entrega ${fechaTxt(o.fecha_entrega)}` : ''}</div></div>
+    <div><div class="row between small"><span>HH ${hrs(c.horas)}${ph ? ` de ${hrs(ph)}` : ''}</span><span class="muted">${ph ? pct(ratio * 100) : ''}</span></div>
+      <div class="bar"><i class="${ratio > 1 ? 'over' : ratio > .9 ? 'warn' : ''}" style="width:${Math.min(100, ratio * 100)}%"></i></div></div>
+    ${+o.cantidad > 1 ? `<div><div class="row between small"><span>Piezas terminadas ${num(o.terminadas, 0)} de ${num(o.cantidad, 0)}</span><span class="muted">${pct(c.avancePiezas * 100)}</span></div><div class="bar"><i style="width:${Math.min(100, c.avancePiezas * 100)}%;background:var(--ok)"></i></div></div>` : ''}
+    ${isAdmin() ? `<div><div class="row between small"><span>Costo ${clp(c.total)}${c.pTotal ? ` de ${clp(c.pTotal)}` : ''}</span><span class="muted">${c.pTotal ? pct(ratioC * 100) : ''}</span></div>
+      <div class="bar"><i class="${ratioC > 1 ? 'over' : ratioC > .9 ? 'warn' : ''}" style="width:${Math.min(100, ratioC * 100)}%"></i></div></div>` : ''}
+    <div class="row" style="gap:6px">${atras ? '<span class="chip bad">Atrasada</span>' : ''}${c.abiertas ? `<span class="chip run"><span class="dot"></span> ${c.abiertas} trabajando</span>` : ''}
+      ${c.horasRet ? `<span class="chip bad">${hrs(c.horasRet)} retrabajo</span>` : ''}
+      ${isAdmin() && c.pendientes ? `<span class="chip warn">${c.pendientes} costos sin dato</span>` : ''}
+      ${isAdmin() && c.estPct >= 1 ? `<span class="chip est">${pct(c.estPct)} estimado</span>` : ''}
+      ${isAdmin() && c.margen != null && o.estado !== 'cotizada' ? `<span class="chip ${c.margen < 0 ? 'bad' : 'ok'}">Margen ${clp(c.margen)}</span>` : ''}</div>
+  </button>`;
+}
+function vOTDetalle() {
+  const o = otOf(S.ui.otId); if (!o) { S.tab = 'ots'; return vOTs(); }
+  const c = costOT(o), adm = isAdmin();
+  const porOp = {}, porPer = {};
+  c.hh.forEach(r => { const h = closed(r) ? +r.horas : elapsedH(r.inicio); const k = opOf(r.operacion_id)?.nombre || 'Sin operación'; porOp[k] = (porOp[k] || 0) + h; const n = perfil(r.perfil_id)?.nombre || '—'; porPer[n] = (porPer[n] || 0) + h; });
+  const maxOp = Math.max(1, ...Object.values(porOp));
+  const p = c.p || {};
+  const line = (l, real, pp, est) => `<tr><td>${l}${est ? ' <span class="chip est">estimado</span>' : ''}</td><td class="n">${clp(real)}</td>${c.p ? `<td class="n">${clp(pp)}</td><td class="n" style="color:${real > pp && pp ? 'var(--bad)' : 'inherit'}">${pp ? clp(real - pp) : '—'}</td>` : ''}</tr>`;
+  const estHH = c.hh.some(r => r.costo_estimado), estMat = c.cons.some(x => x.estado_costo === 'estimado'), estServ = c.servL.some(x => x.estado_costo === 'estimado');
+  return `
+  <div class="row"><button class="btn ghost" data-act="tab" data-k="ots">‹ Órdenes de trabajo</button></div>
+  <div class="row between"><div><div class="row"><span class="ot" style="font-size:1.1rem">${esc(o.numero)}</span><span class="chip acc">${ESTADOS_OT[o.estado]}</span></div>
+     <h1 style="margin-top:6px">${esc(o.descripcion || '')}</h1><div class="muted">${esc(o.cliente)} · ${num(o.cantidad, 0)} ${esc(o.unidad)}${o.fecha_entrega ? ` · entrega ${fechaTxt(o.fecha_entrega)}` : ''}</div></div>
+    <div class="row"><button class="btn" data-act="ot-edit" data-id="${o.id}">Editar OT</button>${adm ? `<button class="btn" data-act="ot-csv" data-id="${o.id}">Exportar detalle</button>` : ''}</div></div>
+  ${adm ? `<div class="grid2">
+    <div class="card"><div class="label">Costo real a la fecha</div><div class="big">${clp(c.total)}</div>
+      <div class="small muted">${c.p ? `Presupuesto ${clp(c.pTotal)} · ` : ''}${num(o.cantidad, 0) > 1 ? `${clp(c.unit)} por ${esc(o.unidad)} sobre ${num(o.cantidad, 0)}` : ''}</div>
+      ${c.proy ? `<div class="small">Proyección al terminar (según ${pct(c.avancePiezas * 100)} de piezas): <strong>${clp(c.proy)}</strong></div>` : ''}
+      <div class="row">${c.margen != null ? `<span class="chip ${c.margen < 0 ? 'bad' : 'ok'}">Margen actual ${clp(c.margen)} (${pct(c.margen / p.precio_venta * 100)})</span>` : ''}
+        ${c.estPct >= 1 ? `<span class="chip est">${pct(c.estPct)} del costo es estimado</span>` : ''}${c.pendientes ? `<span class="chip warn">${c.pendientes} ítems sin costo</span>` : ''}
+        ${c.horasPend ? `<span class="chip">${hrs(c.horasPend)} sin aprobar</span>` : ''}</div></div>
+    <div class="card"><div class="label">Real vs cotizado</div><div class="tbl-wrap"><table><thead><tr><th>Ítem</th><th class="n">Real</th>${c.p ? '<th class="n">Cotizado</th><th class="n">Diferencia</th>' : ''}</tr></thead><tbody>
+      ${line('Mano de obra (normal + extra)', c.mo + c.extra, +p.ppto_hh, estHH)}${line('Horas máquina', c.maq, +p.ppto_maquina)}${line('Materiales', c.mat, +p.ppto_material, estMat)}${line('Pintura, TT y servicios', c.serv, +p.ppto_servicios, estServ)}
+      ${line(`Gastos generales ${cfg('gg_pct')}%`, c.gg, c.pTotal - c.pDirecto)}
+      <tr><td><strong>Total</strong></td><td class="n"><strong>${clp(c.total)}</strong></td>${c.p ? `<td class="n"><strong>${clp(c.pTotal)}</strong></td><td class="n"><strong>${clp(c.total - c.pTotal)}</strong></td>` : ''}</tr>
+      </tbody></table></div>
+      <div class="small muted">Horas extra: ${hrs(c.horasExtra)} = ${clp(c.extra)}. Retrabajo: ${hrs(c.horasRet)} = ${clp(c.ret)}.${c.p ? '' : ' Sin cotización cargada: edita la OT para ingresarla.'}</div></div></div>` : ''}
+  <div class="grid2">
+    <div class="card"><div class="row between"><h3>Horas hombre</h3><span class="muted small">${hrs(c.horas)}${+o.ppto_horas ? ` de ${hrs(o.ppto_horas)} cotizadas` : ''}</span></div>
+      ${Object.entries(porOp).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><div class="row between small"><span>${esc(k)}</span><span>${hrs(v)}</span></div><div class="bar"><i style="width:${v / maxOp * 100}%"></i></div></div>`).join('') || '<div class="empty">Sin horas registradas.</div>'}
+      <details><summary class="small">Por persona</summary><div class="kv small" style="margin-top:8px">${Object.entries(porPer).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><span class="v">${hrs(v)}</span>`).join('')}</div></details></div>
+    <div class="card"><div class="row between"><h3>Materiales</h3>${adm ? `<span class="muted small">${clp(c.mat)}</span>` : ''}</div>
+      ${c.cons.length ? `<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="n">Cant.</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.cons.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}${x.origen === 'compra_directa' ? ' <span class="chip">compra directa</span>' : ''}</td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td>
+        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td><button class="btn ghost" data-act="costo-edit" data-t="consumos" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin consumos.</div>'}</div>
+    <div class="card"><div class="row between"><h3>Pintura, tratamiento térmico y servicios</h3>${adm ? `<span class="muted small">${clp(c.serv)}</span>` : ''}</div>
+      ${c.servL.length ? `<div class="tbl-wrap"><table><thead><tr><th>Servicio</th><th class="n">Cant.</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.servL.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}<div class="tiny muted">${TIPOS_SERV[x.tipo]} · ${x.proveedor ? esc(x.proveedor) : 'propio'}</div></td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td>
+        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td><button class="btn ghost" data-act="costo-edit" data-t="servicios" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin servicios.</div>'}
+      <button class="btn ghost" data-act="serv-new" data-ot="${o.id}">+ Registrar servicio</button></div>
+  </div>`;
+}
+function sheetOT(o) {
+  o = o || {estado: 'en_proceso', cantidad: 1, unidad: 'pza', terminadas: 0};
+  const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || {};
+  const v = x => x == null ? '' : x;
+  openModal(o.id ? `Editar ${o.numero}` : 'Nueva OT', `<form data-form="ot"><input type="hidden" name="id" value="${o.id || ''}">
+    <div class="fgrid"><label class="f"><span>N° OT</span><input type="text" name="numero" id="ot-n" value="${esc(o.numero || '')}" required placeholder="OT-2621"></label>
+      <label class="f"><span>Estado</span><select name="estado" id="ot-e">${Object.entries(ESTADOS_OT).map(([k, l]) => `<option value="${k}" ${o.estado === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+    <label class="f"><span>Cliente</span><input type="text" name="cliente" id="ot-c" value="${esc(o.cliente || '')}" required></label>
+    <label class="f"><span>Descripción</span><input type="text" name="descripcion" id="ot-d" value="${esc(o.descripcion || '')}"></label>
+    <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cantidad" id="ot-q" min="1" step="any" value="${v(o.cantidad)}" required></label>
+      <label class="f"><span>Unidad</span><input type="text" name="unidad" id="ot-u" value="${esc(o.unidad || 'pza')}" placeholder="pza, spool, m"></label>
+      <label class="f"><span>Terminadas</span><input type="number" name="terminadas" id="ot-t" min="0" step="any" value="${v(o.terminadas)}"></label>
+      <label class="f"><span>Entrega</span><input type="date" name="fecha_entrega" id="ot-f" value="${v(o.fecha_entrega)}"></label>
+      <label class="f"><span>HH cotizadas</span><input type="number" name="ppto_horas" id="ot-h" min="0" step="any" value="${v(o.ppto_horas)}"></label></div>
+    ${isAdmin() ? `<div class="label">Cotización (solo administración)</div><div class="fgrid">
+      <label class="f"><span>Mano de obra $</span><input type="number" name="ppto_hh" id="ot-p1" min="0" value="${v(p.ppto_hh)}"></label>
+      <label class="f"><span>Materiales $</span><input type="number" name="ppto_material" id="ot-p2" min="0" value="${v(p.ppto_material)}"></label>
+      <label class="f"><span>Servicios $</span><input type="number" name="ppto_servicios" id="ot-p3" min="0" value="${v(p.ppto_servicios)}"></label>
+      <label class="f"><span>Máquinas $</span><input type="number" name="ppto_maquina" id="ot-p4" min="0" value="${v(p.ppto_maquina)}"></label>
+      <label class="f"><span>Precio de venta $</span><input type="number" name="precio_venta" id="ot-p5" min="0" value="${v(p.precio_venta)}"></label></div>
+      <p class="small muted">Montos de costo directo, sin gastos generales. La app suma ${cfg('gg_pct')}% de gastos generales a ambos lados.</p>` : ''}
+    <div class="row"><button class="btn pri">Guardar</button>${o.id && isAdmin() ? `<button type="button" class="btn danger" data-act="ot-del" data-id="${o.id}">Eliminar</button>` : ''}</div></form>`);
+}
+
+/* ---------------- SERVICIOS */
+function vServicios() {
+  const rec = [...S.d.servicios].sort((a, b) => b.id - a.id).slice(0, 40);
+  return `<div class="row between"><div><div class="label">Pintura · tratamiento térmico · externos</div><h1>Pintura y servicios</h1></div><button class="btn pri" data-act="serv-new">+ Registrar</button></div>
+  <p class="small muted">Registra los m² pintados, los kg tratados o el servicio externo contra su OT. Si no sabes el costo, déjalo en blanco: queda marcado como pendiente para administración.</p>
+  <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>OT</th><th>Servicio</th><th class="n">Cantidad</th><th>Costo</th></tr></thead><tbody>
+  ${rec.map(x => `<tr><td>${fechaTxt(x.fecha)}</td><td><span class="ot">${esc(otOf(x.ot_id)?.numero)}</span></td><td style="white-space:normal">${esc(x.descripcion)}<div class="tiny muted">${TIPOS_SERV[x.tipo]} · ${x.proveedor ? esc(x.proveedor) : 'propio'}</div></td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td>
+    <td>${x.estado_costo === 'pendiente' ? '<span class="chip warn">Pendiente</span>' : x.estado_costo === 'estimado' ? '<span class="chip est">Estimado</span>' : '<span class="chip ok">Real</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Sin registros.</td></tr>'}</tbody></table></div></div>`;
+}
+function sheetServicio(otId) {
+  const ots = S.d.ots.filter(o => o.estado !== 'entregada');
+  openModal('Registrar pintura o servicio', `<form data-form="serv">
+    <label class="f"><span>OT</span><select name="ot" id="sv-ot" required><option value="">Elegir…</option>${ots.map(o => `<option value="${o.id}" ${o.id === otId ? 'selected' : ''}>${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
+    <div class="seg" role="group"><button type="button" data-act="sv-modo" data-k="propio" aria-pressed="true">Proceso propio</button><button type="button" data-act="sv-modo" data-k="externo" aria-pressed="false">Servicio externo</button></div>
+    <input type="hidden" name="modo" id="sv-modo" value="propio">
+    <label class="f" id="sv-prop"><span>Proceso</span><select name="proc" id="sv-proc">${S.d.procesos.map(p => `<option value="${p.id}">${esc(p.nombre)} (${esc(p.unidad)})</option>`).join('')}</select></label>
+    <div id="sv-ext" hidden class="fgrid">
+      <label class="f"><span>Tipo</span><select name="tipo" id="sv-tipo">${Object.entries(TIPOS_SERV).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+      <label class="f"><span>Proveedor</span><input type="text" name="prov" id="sv-prov"></label>
+      <label class="f" style="grid-column:1/-1"><span>Descripción</span><input type="text" name="desc" id="sv-desc"></label>
+      <label class="f"><span>Unidad</span><input type="text" name="unidad" id="sv-u" placeholder="un, m², kg"></label></div>
+    <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cant" id="sv-c" step="any" min="0" required></label>
+      ${isAdmin() ? '<label class="f"><span>Costo unitario $ (vacío = según catálogo o pendiente)</span><input type="number" name="cu" id="sv-cu" step="any" min="0"></label>' : '<input type="hidden" name="cu" value="">'}
+      <label class="f"><span>Factura / OC</span><input type="text" name="doc" id="sv-doc"></label></div>
+    <button class="btn pri">Guardar</button></form>`);
+}
+
+/* ---------------- BODEGA */
+function vBodega() {
+  const t = S.ui.bodTab, bajo = S.d.materiales.filter(m => m.activo && +m.stock <= +m.stock_min);
+  const tabsH = `<div class="seg" style="max-width:480px">${[['consumo', 'Salida a OT'], ['ingreso', 'Ingreso'], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
+  const mats = S.d.materiales.filter(m => m.activo);
+  const matOpts = mats.map(m => `<option value="${m.id}">${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} — ${num(m.stock, 2)} ${esc(m.unidad)}</option>`).join('');
+  let body = '';
+  if (t === 'consumo') {
+    const rec = [...S.d.consumos].sort((a, b) => b.id - a.id).slice(0, 25);
+    body = `<div class="grid2"><form class="card" data-form="consumo"><h2>Salida de material a una OT</h2>
+      <label class="f"><span>OT</span><select name="ot" id="cs-ot" required><option value="">Elegir…</option>${S.d.ots.filter(o => o.estado !== 'entregada').map(o => `<option value="${o.id}">${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
+      <div class="seg" role="group"><button type="button" data-act="cs-modo" data-k="bodega" aria-pressed="true">Desde bodega</button><button type="button" data-act="cs-modo" data-k="compra_directa" aria-pressed="false">Compra directa a la OT</button></div>
+      <input type="hidden" name="origen" id="cs-origen" value="bodega">
+      <div id="cs-bod" class="f"><span>Material</span><input type="search" id="cs-buscar" placeholder="Buscar por código o nombre" data-input="cs-buscar"><select name="mat" id="cs-mat" size="5">${matOpts}</select></div>
+      <div id="cs-dir" hidden class="fgrid"><label class="f" style="grid-column:1/-1"><span>Descripción</span><input type="text" name="desc" id="cs-desc"></label>
+        <label class="f"><span>Unidad</span><input type="text" name="unidad" id="cs-u" placeholder="kg, m, un"></label>
+        <label class="f"><span>Costo unitario $ (si no lo sabes, déjalo vacío)</span><input type="number" name="cu" id="cs-cu" min="0" step="any"></label></div>
+      <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cant" id="cs-c" min="0" step="any" required></label>
+        <label class="f"><span>Guía / OC / factura</span><input type="text" name="doc" id="cs-doc"></label></div>
+      <button class="btn pri xl">Registrar salida</button></form>
+      <div class="card"><h2>Últimos movimientos</h2><div class="list">${rec.map(x => `<div class="item"><div class="t"><span class="ot">${esc(otOf(x.ot_id)?.numero)}</span> ${esc(x.descripcion)}<div class="small muted">${fechaTxt(x.fecha)} · ${x.origen === 'bodega' ? 'bodega' : 'compra directa'}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div>
+        <div style="text-align:right"><strong>${num(x.cantidad, 2)} ${esc(x.unidad || '')}</strong>${x.estado_costo === 'pendiente' ? '<div><span class="chip warn">sin costo</span></div>' : ''}</div></div>`).join('') || '<div class="empty">Sin movimientos.</div>'}</div></div></div>`;
+  } else if (t === 'ingreso') {
+    const rec = [...S.d.stock_ingresos].sort((a, b) => b.id - a.id).slice(0, 25);
+    body = `<div class="grid2"><form class="card" data-form="ingreso"><h2>Ingreso a bodega</h2>
+      <div class="f"><span>Material</span><input type="search" id="in-buscar" placeholder="Buscar" data-input="in-buscar"><select name="mat" id="in-mat" size="5" required>${matOpts}</select></div>
+      <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cant" id="in-c" min="0" step="any" required></label>
+        <label class="f"><span>Costo unitario $</span><input type="number" name="cu" id="in-cu" min="0" step="any"></label>
+        <label class="f"><span>OC / factura</span><input type="text" name="doc" id="in-doc"></label></div>
+      <p class="small muted">El costo unitario pasa a ser el costo del material para las siguientes salidas.</p>
+      <button class="btn pri xl">Registrar ingreso</button>${isAdmin() ? '' : ''}</form>
+      <div class="card"><h2>Últimos ingresos</h2><div class="list">${rec.map(x => { const m = byId(S.d.materiales, x.material_id); return `<div class="item"><div class="t">${esc(m?.nombre)}<div class="small muted">${fechaTxt(x.fecha)}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div><strong>${num(x.cantidad, 2)} ${esc(m?.unidad)}</strong></div>`; }).join('') || '<div class="empty">Sin ingresos recientes.</div>'}</div>
+      ${isAdmin() ? '<button class="btn ghost" data-act="aj-tab-go" data-k="materiales">Agregar material nuevo al catálogo</button>' : '<p class="small muted">¿El material no está en la lista? Pídele a administración que lo agregue.</p>'}</div></div>`;
+  } else {
+    body = `<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Material</th><th class="n">Stock</th><th class="n">Mínimo</th>${isAdmin() || role() === 'bodega' ? '<th class="n">Costo unit.</th>' : ''}<th></th></tr></thead><tbody>
+      ${S.d.materiales.filter(m => m.activo).sort((a, b) => (+a.stock - +a.stock_min) - (+b.stock - +b.stock_min)).map(m => `<tr><td>${esc(m.codigo || '')}</td><td style="white-space:normal">${esc(m.nombre)}</td><td class="n">${num(m.stock, 2)} ${esc(m.unidad)}</td><td class="n">${num(m.stock_min, 2)}</td>
+      ${isAdmin() || role() === 'bodega' ? `<td class="n">${m.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(m.costo_unit)}${m.costo_estimado ? ' <span class="chip est">est.</span>' : ''}</td>` : ''}
+      <td>${+m.stock <= +m.stock_min ? '<span class="chip bad">Reponer</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
+      ${isAdmin() ? '<button class="btn" data-act="csv-stock">Exportar stock</button>' : ''}</div>`;
+  }
+  return `<div class="row between"><h1>Bodega</h1></div>${tabsH}${body}`;
+}
+
+/* ---------------- RESUMEN (admin) */
+function vResumen() {
+  const act = S.d.ots.filter(o => o.estado === 'en_proceso');
+  const cs = act.map(o => ({o, c: costOT(o)}));
+  const desde = addDays(hoy(), -6);
+  const hh7 = S.d.hh.filter(r => r.fecha >= desde && closed(r));
+  const tot7 = sum(hh7, r => r.horas) || 1;
+  const porTipo = Object.keys(TIPOS_HH).map(k => [k, sum(hh7.filter(r => r.tipo === k), r => r.horas)]);
+  const motivos = {}; hh7.filter(r => r.tipo === 'improductiva').forEach(r => motivos[r.motivo || 'Sin motivo'] = (motivos[r.motivo || 'Sin motivo'] || 0) + +r.horas);
+  const extraP = {}; hh7.forEach(r => { if (+r.horas_extra) { const n = perfil(r.perfil_id)?.nombre || '—'; extraP[n] = (extraP[n] || 0) + +r.horas_extra; } });
+  const costoExtra7 = sum(hh7, r => r.costo_extra);
+  const bajo = S.d.materiales.filter(m => m.activo && +m.stock <= +m.stock_min);
+  const sinCuadrar = []; for (let i = 1; i <= 6; i++) { const f = addDays(hoy(), -i); S.d.perfiles.forEach(p => { const q = cuadre(p.id, f); if (['bad', 'warn'].includes(q.st)) sinCuadrar.push({p, f, q}); }); }
+  const pendAprob = S.d.hh.filter(r => r.estado === 'pendiente' && r.fecha < hoy() && closed(r)).length;
+  const sinCosto = sum(cs, x => x.c.pendientes);
+  const totReal = sum(cs, x => x.c.total), totPpto = sum(cs, x => x.c.pTotal), totVenta = sum(cs, x => +x.c.p?.precio_venta || 0);
+  const trabajando = S.d.hh.filter(r => !closed(r) && r.fecha === hoy()).length;
+  return `
+  <div class="row between"><div><div class="label">${fechaTxt(hoy())}</div><h1>Resumen del taller</h1></div><span class="chip run"><span class="dot"></span> ${trabajando} personas trabajando ahora</span></div>
+  <div class="grid2">
+    <div class="card"><div class="label">OT en proceso · costo real a la fecha</div><div class="big">${clp(totReal)}</div>
+      <div class="small muted">Cotizado ${clp(totPpto)} · venta ${clp(totVenta)} · ${act.length} OT</div>
+      <div class="row">${sinCosto ? `<span class="chip warn">${sinCosto} costos sin dato</span>` : '<span class="chip ok">Todos los costos con dato</span>'}${pendAprob ? `<span class="chip warn">${pendAprob} registros de HH sin aprobar</span>` : ''}</div></div>
+    <div class="card"><div class="label">Alertas</div><div class="list">
+      ${sinCuadrar.length ? `<div class="item"><div class="t">${sinCuadrar.length} ${sinCuadrar.length === 1 ? 'día-persona' : 'días-persona'} sin cuadrar esta semana<div class="small muted">${[...new Set(sinCuadrar.map(x => x.p.nombre))].slice(0, 4).map(esc).join(', ')}</div></div><button class="btn ghost" data-act="go-validar" data-f="${sinCuadrar[0].f}">Revisar</button></div>` : ''}
+      ${bajo.length ? `<div class="item"><div class="t">${bajo.length} materiales bajo mínimo<div class="small muted">${bajo.slice(0, 3).map(m => esc(m.nombre)).join(', ')}</div></div><button class="btn ghost" data-act="go-stock">Ver stock</button></div>` : ''}
+      ${cs.filter(x => x.o.fecha_entrega && x.o.fecha_entrega < hoy()).map(x => `<div class="item"><div class="t"><span class="ot">${esc(x.o.numero)}</span> atrasada</div><span class="small muted">entrega ${fechaTxt(x.o.fecha_entrega)}</span></div>`).join('')}
+      ${cs.filter(x => x.c.pTotal && x.c.total > x.c.pTotal * .9).map(x => `<div class="item"><div class="t"><span class="ot">${esc(x.o.numero)}</span> lleva ${pct(x.c.total / x.c.pTotal * 100)} del presupuesto</div><span class="small muted">${pct(x.c.avancePiezas * 100)} piezas</span></div>`).join('')}
+      ${!sinCuadrar.length && !bajo.length ? '<div class="small muted">Sin alertas.</div>' : ''}</div></div>
+  </div>
+  <h2>OT en proceso</h2>
+  <div class="grid3">${act.map(otCard).join('') || '<div class="empty">No hay OT en proceso.</div>'}</div>
+  <h2>Últimos 7 días</h2>
+  <div class="grid2">
+    <div class="card"><div class="row between"><h3>Uso de las horas</h3><span class="muted small">${hrs(tot7)}</span></div>
+      <div class="stack">${porTipo.map(([k, v]) => `<i style="width:${v / tot7 * 100}%;background:${COL[k]}" title="${TIPOS_HH[k]} ${hrs(v)}"></i>`).join('')}</div>
+      <div class="legend">${porTipo.map(([k, v]) => `<span style="--c:${COL[k]}">${TIPOS_HH[k]} ${hrs(v)} (${pct(v / tot7 * 100)})</span>`).join('')}</div>
+      ${Object.keys(motivos).length ? `<div class="label">Esperas y detenciones</div><div class="kv small">${Object.entries(motivos).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><span class="v">${hrs(v)}</span>`).join('')}</div>` : ''}</div>
+    <div class="card"><div class="row between"><h3>Horas extra</h3><span class="muted small">${hrs(sum(Object.values(extraP), x => x))} · ${clp(costoExtra7)}</span></div>
+      <div class="kv small">${Object.entries(extraP).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><span class="v">${hrs(v)}</span>`).join('') || '<span class="muted">Sin horas extra.</span>'}</div>
+      <button class="btn ghost" data-act="tab" data-k="reportes">Reporte por trabajador</button></div>
+  </div>`;
+}
+
+/* ---------------- REPORTES (admin) */
+function repData() {
+  const d = S.ui.repDesde || addDays(hoy(), -(+hoy().slice(8) - 1)), h = S.ui.repHasta || hoy();
+  const rs = S.d.hh.filter(r => r.fecha >= d && r.fecha <= h && closed(r));
+  const rows = S.d.perfiles.map(p => {
+    const x = rs.filter(r => r.perfil_id === p.id);
+    const by = k => sum(x.filter(r => r.tipo === k), r => r.horas);
+    return {p, dias: new Set(x.map(r => r.fecha)).size, directa: by('directa'), retrabajo: by('retrabajo'), indirecta: by('indirecta'), improductiva: by('improductiva'),
+      total: sum(x, r => r.horas), extra: sum(x, r => r.horas_extra), costo: sum(x, r => (+r.costo_hh || 0) + (+r.costo_extra || 0)), pend: x.filter(r => r.estado === 'pendiente').length};
+  }).filter(r => r.total);
+  return {d, h, rows};
+}
+function vReportes() {
+  const {d, h, rows} = repData();
+  const T = k => sum(rows, r => r[k]);
+  return `<div class="row between"><h1>Reportes</h1></div>
+  <div class="card"><div class="row" style="align-items:end">
+    <label class="f"><span>Desde</span><input type="date" id="rep-d" data-change="rep-d" value="${d}"></label>
+    <label class="f"><span>Hasta</span><input type="date" id="rep-h" data-change="rep-h" value="${h}"></label>
+    <button class="btn" data-act="rep-mes" data-n="0">Este mes</button><button class="btn" data-act="rep-mes" data-n="-1">Mes anterior</button></div>
+    ${d < addDays(hoy(), -62) && !DEMO ? '<p class="small muted">Para fechas de más de 2 meses atrás, la app trae los datos al aplicar el filtro.</p>' : ''}</div>
+  <div class="card"><div class="row between"><h2>Horas por trabajador</h2><button class="btn" data-act="csv-rep">Exportar para remuneraciones</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Trabajador</th><th>Categoría</th><th class="n">Días</th><th class="n">Directas</th><th class="n">Retrabajo</th><th class="n">Indirectas</th><th class="n">Esperas</th><th class="n">Total</th><th class="n">Extra</th><th class="n">Costo</th><th class="n">Sin aprobar</th></tr></thead><tbody>
+    ${rows.sort((a, b) => b.total - a.total).map(r => `<tr><td>${esc(r.p.nombre)}</td><td>${esc(byId(S.d.tarifas, r.p.tarifa_id)?.nombre || '—')}</td><td class="n">${r.dias}</td><td class="n">${num(r.directa)}</td><td class="n">${num(r.retrabajo)}</td><td class="n">${num(r.indirecta)}</td><td class="n">${num(r.improductiva)}</td><td class="n"><strong>${num(r.total)}</strong></td><td class="n">${num(r.extra)}</td><td class="n">${clp(r.costo)}</td><td class="n">${r.pend || ''}</td></tr>`).join('')}
+    <tr><td><strong>Total</strong></td><td></td><td></td><td class="n">${num(T('directa'))}</td><td class="n">${num(T('retrabajo'))}</td><td class="n">${num(T('indirecta'))}</td><td class="n">${num(T('improductiva'))}</td><td class="n"><strong>${num(T('total'))}</strong></td><td class="n">${num(T('extra'))}</td><td class="n">${clp(T('costo'))}</td><td></td></tr>
+    </tbody></table></div>
+    <p class="small muted">Productividad: ${pct(T('directa') / (T('total') || 1) * 100)} de las horas fueron directas en OT. Retrabajo ${pct(T('retrabajo') / (T('total') || 1) * 100)}.</p></div>
+  <div class="card"><div class="row between"><h2>Costo por OT</h2><button class="btn" data-act="csv-ots">Exportar para el ERP</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>OT</th><th>Cliente</th><th>Estado</th><th class="n">HH</th><th class="n">M. obra</th><th class="n">Máquinas</th><th class="n">Materiales</th><th class="n">Servicios</th><th class="n">GG</th><th class="n">Total</th><th class="n">Cotizado</th><th class="n">Venta</th><th class="n">Margen</th></tr></thead><tbody>
+    ${S.d.ots.map(o => { const c = costOT(o); return `<tr class="click" data-act="ot-open" data-id="${o.id}"><td><span class="ot">${esc(o.numero)}</span></td><td>${esc(o.cliente)}</td><td>${ESTADOS_OT[o.estado]}</td><td class="n">${num(c.horas)}</td><td class="n">${clp(c.mo + c.extra)}</td><td class="n">${clp(c.maq)}</td><td class="n">${clp(c.mat)}</td><td class="n">${clp(c.serv)}</td><td class="n">${clp(c.gg)}</td><td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${clp(c.pTotal)}</td><td class="n">${clp(c.p?.precio_venta)}</td><td class="n" style="color:${(c.margen || 0) < 0 ? 'var(--bad)' : 'inherit'}">${c.margen == null ? '—' : clp(c.margen)}</td></tr>`; }).join('')}
+    </tbody></table></div>
+    <p class="small muted">Las OT entregadas hace más de 2 meses traen sus horas al abrirlas.</p></div>`;
+}
+
+/* ---------------- AJUSTES (admin) */
+const CAT = {
+  trabajadores: {t: 'perfiles', title: 'Trabajadores', fields: [['nombre', 'Nombre', 'text'], ['rol', 'Rol', 'sel', () => Object.entries(ROLES)], ['tarifa_id', 'Categoría / tarifa', 'sel', () => [['', 'Sin tarifa'], ...S.d.tarifas.map(t => [t.id, t.nombre])]], ['activo', 'Activo', 'bool']],
+    cols: [['nombre', 'Nombre'], ['usuario', 'Usuario'], [r => ROLES[r.rol], 'Rol'], [r => byId(S.d.tarifas, r.tarifa_id)?.nombre || '—', 'Tarifa'], [r => r.activo ? '<span class="chip ok">Activo</span>' : '<span class="chip">Inactivo</span>', 'Estado']]},
+  tarifas: {t: 'tarifas', title: 'Costo HH por categoría', help: 'Costo empresa por hora: sueldo + leyes sociales + bonos, dividido por las horas normales del mes. Puedes crear una por persona si su costo es distinto. Marca "estimado" si aún no tienes el dato exacto.',
+    fields: [['nombre', 'Categoría o nombre', 'text'], ['costo_hh', 'Costo hora normal $', 'num'], ['costo_hh_extra', 'Costo hora extra $', 'num'], ['estimada', 'Valor estimado', 'bool']],
+    cols: [['nombre', 'Categoría'], [r => clp(r.costo_hh), 'Hora normal', 'n'], [r => clp(r.costo_hh_extra), 'Hora extra', 'n'], [r => r.estimada ? '<span class="chip est">estimado</span>' : '<span class="chip ok">real</span>', 'Dato']]},
+  materiales: {t: 'materiales', title: 'Materiales', help: 'Deja el costo vacío si no lo sabes: los consumos quedan como pendientes hasta que lo completes.',
+    fields: [['codigo', 'Código', 'text'], ['nombre', 'Nombre', 'text'], ['unidad', 'Unidad', 'text'], ['costo_unit', 'Costo unitario $', 'num'], ['costo_estimado', 'Costo estimado', 'bool'], ['stock', 'Stock', 'num'], ['stock_min', 'Stock mínimo', 'num'], ['activo', 'Activo', 'bool']],
+    cols: [['codigo', 'Código'], ['nombre', 'Nombre'], ['unidad', 'Unidad'], [r => r.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(r.costo_unit) + (r.costo_estimado ? ' <span class="chip est">est.</span>' : ''), 'Costo', 'n'], [r => num(r.stock, 2), 'Stock', 'n']]},
+  procesos: {t: 'procesos', title: 'Procesos propios', help: 'Costo por unidad de pintura, arenado y tratamiento térmico hechos en el taller (insumos y energía; las HH se registran aparte).',
+    fields: [['nombre', 'Nombre', 'text'], ['tipo', 'Tipo', 'sel', () => Object.entries(TIPOS_SERV)], ['unidad', 'Unidad', 'text'], ['costo_unit', 'Costo por unidad $', 'num'], ['estimada', 'Valor estimado', 'bool']],
+    cols: [['nombre', 'Proceso'], [r => TIPOS_SERV[r.tipo], 'Tipo'], ['unidad', 'Unidad'], [r => clp(r.costo_unit) + (r.estimada ? ' <span class="chip est">est.</span>' : ''), 'Costo', 'n']]},
+  maquinas: {t: 'maquinas', title: 'Máquinas', help: 'Costo por hora de uso: depreciación, energía y mantención. Se suma a la OT cuando el operario elige la máquina.',
+    fields: [['nombre', 'Nombre', 'text'], ['costo_hh', 'Costo hora $', 'num'], ['estimada', 'Valor estimado', 'bool'], ['activa', 'Activa', 'bool']],
+    cols: [['nombre', 'Máquina'], [r => clp(r.costo_hh) + (r.estimada ? ' <span class="chip est">est.</span>' : ''), 'Costo hora', 'n'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
+  operaciones: {t: 'operaciones', title: 'Operaciones', fields: [['nombre', 'Nombre', 'text'], ['activa', 'Activa', 'bool']], cols: [['nombre', 'Operación'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
+  dias: {t: 'dias_especiales', key: 'fecha', title: 'Feriados', help: 'En estos días (y los domingos) todas las horas cuentan como extra.', fields: [['fecha', 'Fecha', 'date'], ['descripcion', 'Descripción', 'text']], cols: [[r => fechaTxt(r.fecha), 'Fecha'], ['descripcion', 'Descripción']]}
+};
+function vAjustes() {
+  const k = S.ui.ajTab, c = CAT[k];
+  const tabs = `<div class="tabs" style="padding:0">${[...Object.entries(CAT).map(([kk, v]) => [kk, v.title]), ['param', 'Parámetros']].map(([kk, l]) => `<button class="tab" data-act="aj-tab" data-k="${kk}" aria-current="${kk === k}">${l}</button>`).join('')}</div>`;
+  if (k === 'param') return `<h1>Ajustes</h1>${tabs}<form class="card" data-form="param" style="max-width:560px">
+    <label class="f"><span>Gastos generales (% sobre costo directo)</span><input type="number" name="gg_pct" id="pa-gg" step="any" min="0" value="${cfg('gg_pct')}"></label>
+    <label class="f"><span>Jornada diaria normal (horas). Lo que pase de esto se cuenta como hora extra.</span><input type="number" name="jornada_horas" id="pa-j" step="0.25" min="1" value="${cfg('jornada_horas')}"></label>
+    <label class="f"><span>Colación descontada de la asistencia (minutos)</span><input type="number" name="colacion_min" id="pa-c" step="5" min="0" value="${cfg('colacion_min')}"></label>
+    <p class="small muted">Gastos generales: arriendo, administración, consumos básicos, etc. del mes, divididos por el costo directo del mes. Un cambio aquí se aplica a todas las OT.</p>
+    <button class="btn pri">Guardar parámetros</button></form>`;
+  const rows = S.d[c.t] || [];
+  return `<h1>Ajustes</h1>${tabs}<div class="card"><div class="row between"><h2>${c.title}</h2><button class="btn pri" data-act="cat-new" data-k="${k}">+ Agregar</button></div>
+    ${c.help ? `<p class="small muted">${c.help}</p>` : ''}
+    <div class="tbl-wrap"><table><thead><tr>${c.cols.map(([, l, n]) => `<th class="${n || ''}">${l}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map(r => `<tr class="click" data-act="cat-edit" data-k="${k}" data-id="${esc(r[c.key || 'id'])}">${c.cols.map(([f, , n]) => `<td class="${n || ''}" style="white-space:normal">${typeof f === 'function' ? f(r) : esc(r[f])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+}
+function sheetCat(k, id) {
+  const c = CAT[k], r = id != null ? S.d[c.t].find(x => String(x[c.key || 'id']) === String(id)) : {};
+  const nuevoTrab = k === 'trabajadores' && id == null;
+  openModal(`${id != null ? 'Editar' : 'Agregar'} · ${c.title}`, `<form data-form="cat"><input type="hidden" name="_k" value="${k}"><input type="hidden" name="_id" value="${esc(id ?? '')}">
+    ${c.fields.map(([f, l, ty, opts]) => ty === 'bool' ? `<label class="check"><input type="checkbox" name="${f}" id="c-${f}" ${(id == null ? !/estim/.test(f) : r[f]) ? 'checked' : ''}> ${l}</label>`
+      : ty === 'sel' ? `<label class="f"><span>${l}</span><select name="${f}" id="c-${f}">${opts().map(([v, t]) => `<option value="${esc(v)}" ${String(r[f] ?? '') === String(v) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`
+      : `<label class="f"><span>${l}</span><input type="${ty === 'num' ? 'number' : ty}" ${ty === 'num' ? 'step="any"' : ''} name="${f}" id="c-${f}" value="${esc(r[f] ?? '')}" ${['nombre', 'fecha', 'unidad'].includes(f) ? 'required' : ''}></label>`).join('')}
+    ${nuevoTrab ? `<div class="fgrid"><label class="f"><span>Usuario para entrar</span><input type="text" name="usuario" id="c-usuario" required autocapitalize="off" placeholder="jperez"></label>
+      <label class="f"><span>Clave inicial (mínimo 6)</span><input type="text" name="clave" id="c-clave" minlength="6" required></label></div>
+      <p class="small muted">Entrega el usuario y la clave al trabajador. Para cambiar una clave después, se hace desde Supabase (Authentication › Users).</p>` : ''}
+    <div class="row"><button class="btn pri">Guardar</button>${id != null && k !== 'trabajadores' ? `<button type="button" class="btn danger" data-act="cat-del" data-k="${k}" data-id="${esc(id)}">Eliminar</button>` : ''}</div></form>`);
+}
+
+/* ---------------- costo pendiente */
+function sheetCosto(t, id) {
+  const x = byId(S.d[t], id);
+  openModal('Costo del ítem', `<form data-form="costo"><input type="hidden" name="t" value="${t}"><input type="hidden" name="id" value="${id}">
+    <div><strong>${esc(x.descripcion)}</strong><div class="small muted">${num(x.cantidad, 2)} ${esc(x.unidad || '')} · OT ${esc(otOf(x.ot_id)?.numero)}</div></div>
+    <div class="fgrid"><label class="f"><span>Costo unitario $</span><input type="number" name="cu" id="co-cu" step="any" min="0" value="${x.costo_unit ?? ''}" required></label>
+      <label class="f"><span>Factura / OC</span><input type="text" name="doc" id="co-doc" value="${esc(x.doc_ref || '')}"></label></div>
+    <label class="check"><input type="checkbox" name="est" id="co-est" ${x.estado_costo === 'estimado' ? 'checked' : ''}> Es un valor estimado</label>
+    <div class="row"><button class="btn pri">Guardar</button><button type="button" class="btn danger" data-act="item-del" data-t="${t}" data-id="${id}">Eliminar ítem</button></div></form>`);
+}
+
+/* ================================================================ CSV */
+function csv(name, head, rows) {
+  const q = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const n = v => typeof v === 'number' ? String(Math.round(v * 100) / 100).replace('.', ',') : v;
+  const txt = '﻿' + [head, ...rows].map(r => r.map(v => q(n(v))).join(';')).join('\r\n');
+  try {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], {type: 'text/csv;charset=utf-8'})); a.download = name; document.body.append(a); a.click(); a.remove();
+    toast('Archivo descargado (se abre en Excel)');
+  } catch (e) { toast('No se pudo descargar en esta vista'); }
+}
+
+/* ================================================================ EVENTOS */
+const ACT = {
+  'close-ov': (el, e) => { if (e.target === el) closeModal(); }, close: closeModal,
+  tab: el => { S.tab = el.dataset.k; render(); window.scrollTo(0, 0); },
+  reload: () => reload(),
+  logout: async () => { await Cloud.sb.auth.signOut(); S.me = null; render(); },
+  'demo-reset': () => { Demo.reset(); reload(); toast('Datos de ejemplo reiniciados'); },
+  entrada: () => run(() => DB.ins('asistencia', {perfil_id: S.me.id, fecha: hoy(), entrada: new Date().toISOString()}), 'Entrada registrada'),
+  salida: () => {
+    openModal('Marcar salida', `<p>Se cerrará tu tarea en curso y se registrará la salida a las <strong>${hhmm(Date.now())}</strong>.</p><button class="btn pri xl" data-act="salida-ok">Marcar salida</button>`);
+  },
+  'salida-ok': () => run(async () => {
+    const now = new Date().toISOString(), open = S.d.hh.find(r => r.perfil_id === S.me.id && !closed(r));
+    if (open) await DB.upd('hh_registros', open.id, {fin: now});
+    await DB.upd('asistencia', asisDia(S.me.id, hoy()).id, {salida: now});
+  }, 'Salida registrada. ¡Buen descanso!'),
+  'fix-salida': el => { const a = byId(S.d.asistencia, +el.dataset.id); sheetAsisPropia(a); },
+  iniciar: () => sheetIniciar(),
+  'ini-ot': el => sheetOperacion(+el.dataset.id),
+  'ini-op': el => iniciar({ot_id: +el.dataset.ot, operacion_id: +el.dataset.id, maquina_id: +document.getElementById('ini-maq').value || null, tipo: document.getElementById('ini-ret').checked ? 'retrabajo' : 'directa'}),
+  'ini-sin': el => sheetMotivo(el.dataset.k),
+  'ini-mot': el => iniciar({tipo: el.dataset.k, motivo: el.dataset.m}),
+  terminar: el => run(() => DB.upd('hh_registros', +el.dataset.id, {fin: new Date().toISOString()}), 'Tarea terminada'),
+  'cerrar-vieja': el => { const r = byId(S.d.hh, +el.dataset.id), v = document.getElementById('fin-vieja').value; const fin = tsAt(r.fecha, v);
+    if (new Date(fin) <= new Date(r.inicio)) return toast('La hora de término debe ser posterior al inicio (' + hhmm(r.inicio) + ')');
+    run(() => DB.upd('hh_registros', r.id, {fin}), 'Tarea cerrada'); },
+  manual: () => sheetManual(S.me.id),
+  seg: el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const k = el.dataset.k; document.getElementById('m-tipo').value = k;
+    const sin = ['indirecta', 'improductiva'].includes(k); document.getElementById('m-ot-row').hidden = sin; document.getElementById('m-mot-row').hidden = !sin; },
+  'hh-edit': el => { const r = byId(S.d.hh, +el.dataset.id); sheetManual(r.perfil_id, r.fecha, r); },
+  'hh-add': el => sheetManual(el.dataset.p, S.ui.valFecha || hoy()),
+  'hh-del': el => openModal('Eliminar registro', `<p>¿Eliminar este registro de horas? No se puede deshacer.</p><div class="row"><button class="btn danger" data-act="hh-del-ok" data-id="${el.dataset.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`),
+  'hh-del-ok': el => run(() => DB.del('hh_registros', +el.dataset.id), 'Registro eliminado'),
+  'val-dia': el => { S.ui.valFecha = addDays(S.ui.valFecha || hoy(), +el.dataset.n); if (S.ui.valFecha > hoy()) S.ui.valFecha = hoy(); render(); },
+  aprobar: el => aprobar([el.dataset.p]),
+  'aprobar-todos': () => { const f = S.ui.valFecha || hoy(); aprobar(S.d.perfiles.filter(p => { const q = cuadre(p.id, f); return q.st === 'ok' && q.pend; }).map(p => p.id)); },
+  'asis-edit': el => sheetAsis(el.dataset.p, S.ui.valFecha || hoy()),
+  'asis-add': () => sheetAsis('', S.ui.valFecha || hoy()),
+  'go-validar': el => { S.ui.valFecha = el.dataset.f; S.tab = 'validar'; render(); },
+  'go-stock': () => { S.ui.bodTab = 'stock'; S.tab = 'bodega'; render(); },
+  'ot-filtro': el => { S.ui.otFiltro = el.dataset.k; render(); },
+  'ot-new': () => sheetOT(),
+  'ot-open': async el => { S.ui.otId = +el.dataset.id; S.tab = 'ot'; const o = otOf(S.ui.otId); if (!DEMO && o?.estado === 'entregada') { try { await mergeHH({ot: o.id}); } catch (e) {} } render(); window.scrollTo(0, 0); },
+  'ot-edit': el => sheetOT(otOf(+el.dataset.id)),
+  'ot-del': el => openModal('Eliminar OT', `<p>Solo se puede eliminar una OT sin horas, materiales ni servicios registrados.</p><div class="row"><button class="btn danger" data-act="ot-del-ok" data-id="${el.dataset.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`),
+  'ot-del-ok': el => { const id = +el.dataset.id; if (S.d.hh.some(r => r.ot_id === id) || S.d.consumos.some(r => r.ot_id === id) || S.d.servicios.some(r => r.ot_id === id)) return toast('Esta OT tiene registros: cámbiala a "Entregada" en vez de eliminarla');
+    S.tab = 'ots'; run(async () => { await DB.del('ot_ppto', id).catch(() => {}); await DB.del('ots', id); }, 'OT eliminada'); },
+  'ot-csv': el => { const o = otOf(+el.dataset.id), c = costOT(o);
+    csv(`${o.numero}-detalle.csv`, ['Tipo', 'Fecha', 'Detalle', 'Persona/Proveedor', 'Cantidad', 'Unidad', 'Horas extra', 'Costo', 'Estado costo'], [
+      ...c.hh.filter(closed).map(r => ['HH ' + TIPOS_HH[r.tipo], r.fecha, opOf(r.operacion_id)?.nombre || '', perfil(r.perfil_id)?.nombre || '', +r.horas, 'h', +r.horas_extra, (+r.costo_hh || 0) + (+r.costo_extra || 0) + (+r.costo_maquina || 0), r.costo_estimado ? 'estimado' : 'real']),
+      ...c.cons.map(x => ['Material', x.fecha, x.descripcion, x.origen, +x.cantidad, x.unidad, '', +x.total, x.estado_costo]),
+      ...c.servL.map(x => [TIPOS_SERV[x.tipo], x.fecha, x.descripcion, x.proveedor || 'propio', +x.cantidad, x.unidad, '', +x.total, x.estado_costo]),
+      ['Gastos generales', '', `${cfg('gg_pct')}% del costo directo`, '', '', '', '', c.gg, '']]); },
+  'serv-new': el => sheetServicio(+el.dataset.ot || null),
+  'sv-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const ext = el.dataset.k === 'externo';
+    document.getElementById('sv-modo').value = el.dataset.k; document.getElementById('sv-prop').hidden = ext; document.getElementById('sv-ext').hidden = !ext; },
+  'cs-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const d = el.dataset.k === 'compra_directa';
+    document.getElementById('cs-origen').value = el.dataset.k; document.getElementById('cs-bod').hidden = d; document.getElementById('cs-dir').hidden = !d; },
+  'bod-tab': el => { S.ui.bodTab = el.dataset.k; render(); },
+  'costo-edit': el => sheetCosto(el.dataset.t, +el.dataset.id),
+  'item-del': el => run(() => DB.del(el.dataset.t, +el.dataset.id), 'Ítem eliminado'),
+  'aj-tab': el => { S.ui.ajTab = el.dataset.k; render(); },
+  'aj-tab-go': el => { S.ui.ajTab = el.dataset.k; S.tab = 'ajustes'; render(); },
+  'cat-new': el => sheetCat(el.dataset.k),
+  'cat-edit': el => sheetCat(el.dataset.k, el.dataset.id),
+  'cat-del': el => { const c = CAT[el.dataset.k]; const id = c.key ? el.dataset.id : +el.dataset.id; run(() => DB.del(c.t, id), 'Eliminado'); },
+  'rep-mes': async el => { const n = +el.dataset.n; const f = hoy(); let [y, m] = f.split('-').map(Number); m += n; if (m < 1) { m = 12; y--; }
+    const d = `${y}-${String(m).padStart(2, '0')}-01`; const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    S.ui.repDesde = d; S.ui.repHasta = n === 0 ? f : `${y}-${String(m).padStart(2, '0')}-${last}`; await repFetch(); render(); },
+  'csv-rep': () => { const {d, h, rows} = repData();
+    csv(`horas-${d}-a-${h}.csv`, ['Trabajador', 'Usuario', 'Categoría', 'Días', 'HH directas', 'HH retrabajo', 'HH indirectas', 'HH esperas', 'HH total', 'Horas extra', 'Costo HH', 'Registros sin aprobar'],
+      rows.map(r => [r.p.nombre, r.p.usuario || '', byId(S.d.tarifas, r.p.tarifa_id)?.nombre || '', r.dias, r.directa, r.retrabajo, r.indirecta, r.improductiva, r.total, r.extra, Math.round(r.costo), r.pend])); },
+  'csv-ots': () => csv(`costo-ot-${hoy()}.csv`, ['OT', 'Cliente', 'Descripción', 'Estado', 'Cantidad', 'Unidad', 'HH', 'HH extra', 'Mano de obra', 'Máquinas', 'Materiales', 'Servicios', 'Gastos generales', 'Costo total', 'Costo unitario', 'Cotizado', 'Precio venta', 'Margen', '% estimado', 'Ítems sin costo'],
+      S.d.ots.map(o => { const c = costOT(o); return [o.numero, o.cliente, o.descripcion || '', ESTADOS_OT[o.estado], +o.cantidad, o.unidad, c.horas, c.horasExtra, Math.round(c.mo + c.extra), Math.round(c.maq), Math.round(c.mat), Math.round(c.serv), Math.round(c.gg), Math.round(c.total), Math.round(c.unit), Math.round(c.pTotal), +c.p?.precio_venta || 0, c.margen == null ? '' : Math.round(c.margen), Math.round(c.estPct), c.pendientes]; })),
+  'csv-stock': () => csv(`stock-${hoy()}.csv`, ['Código', 'Material', 'Unidad', 'Stock', 'Mínimo', 'Costo unitario', 'Valor'], S.d.materiales.map(m => [m.codigo || '', m.nombre, m.unidad, +m.stock, +m.stock_min, m.costo_unit == null ? '' : +m.costo_unit, m.costo_unit == null ? '' : Math.round(m.stock * m.costo_unit)]))
+};
+function sheetAsisPropia(a) {
+  openModal('Hora de salida', `<form data-form="asis-propia"><input type="hidden" name="id" value="${a.id}"><input type="hidden" name="fecha" value="${a.fecha}">
+    <p>${fechaTxt(a.fecha)} · entrada ${hhmm(a.entrada)}</p><label class="f"><span>¿A qué hora saliste?</span><input type="time" name="sal" id="ap-s" value="18:00" required></label>
+    <button class="btn pri">Guardar</button></form>`);
+}
+async function aprobar(pids) {
+  const f = S.ui.valFecha || hoy();
+  const ids = S.d.hh.filter(r => pids.includes(r.perfil_id) && r.fecha === f && r.estado === 'pendiente' && closed(r)).map(r => r.id);
+  if (!ids.length) return toast('No hay registros cerrados por aprobar');
+  await run(async () => {
+    if (DEMO) { for (const id of ids) await DB.upd('hh_registros', id, {estado: 'aprobado', aprobado_por: S.me.id}); }
+    else { const {error} = await Cloud.sb.from('hh_registros').update({estado: 'aprobado', aprobado_por: S.me.id}).in('id', ids); if (error) throw error; }
+  }, `${ids.length} registros aprobados`);
+}
+async function repFetch() { if (DEMO) return; const d = S.ui.repDesde; if (d && d < addDays(hoy(), -62)) { try { await mergeHH({desde: d, hasta: S.ui.repHasta}); } catch (e) { toast(errTxt(e)); } } }
+
+const FORMS = {
+  async login(fd) {
+    const u = fd.get('u').trim().toLowerCase(), email = u.includes('@') ? u : `${u}@${CONFIG.DOMINIO_USUARIOS}`;
+    const {data, error} = await Cloud.sb.auth.signInWithPassword({email, password: fd.get('p')});
+    if (error) return toast('Usuario o clave incorrectos');
+    await afterLogin(data.user);
+  },
+  manual(fd) {
+    const pid = fd.get('pid'), id = +fd.get('id') || null, tipo = fd.get('tipo'), sin = ['indirecta', 'improductiva'].includes(tipo);
+    const row = {tipo, fecha: fd.get('fecha'), nota: fd.get('nota') || null, ot_id: sin ? null : +fd.get('ot') || null, operacion_id: sin ? null : +fd.get('op') || null, maquina_id: sin ? null : +fd.get('maq') || null, motivo: sin ? (fd.get('motivo') || TIPOS_HH[tipo]) : null};
+    if (!sin && !row.ot_id) return toast('Elige la OT');
+    const rec = id ? byId(S.d.hh, id) : null;
+    if (rec?.inicio) {
+      const ini = fd.get('ini'), fin = fd.get('fin');
+      row.inicio = tsAt(row.fecha, ini); row.fin = fin ? tsAt(row.fecha, fin) : null;
+      if (row.fin && new Date(row.fin) <= new Date(row.inicio)) return toast('El término debe ser posterior al inicio');
+    } else { row.horas = +fd.get('horas'); row.manual = true; if (!(row.horas > 0)) return toast('Indica las horas'); }
+    if (fd.has('extra')) { const ex = +fd.get('extra'); if (Math.abs(ex - +rec.horas_extra) > 0.001) { row.horas_extra = ex; row.extra_manual = true; } }
+    if (id) return run(() => DB.upd('hh_registros', id, row), 'Registro corregido');
+    return run(() => DB.ins('hh_registros', {...row, perfil_id: pid}), 'Horas agregadas');
+  },
+  asis(fd) {
+    const pid = fd.get('pid') || fd.get('pid2'), f = fd.get('fecha'), id = +fd.get('id') || null;
+    const row = {entrada: tsAt(f, fd.get('ent')), salida: fd.get('sal') ? tsAt(f, fd.get('sal')) : null};
+    if (row.salida && row.salida <= row.entrada) return toast('La salida debe ser posterior a la entrada');
+    const ex = asisDia(pid, f);
+    return run(() => (id || ex) ? DB.upd('asistencia', id || ex.id, row) : DB.ins('asistencia', {...row, perfil_id: pid, fecha: f}), 'Asistencia guardada');
+  },
+  'asis-propia'(fd) { const a = byId(S.d.asistencia, +fd.get('id')), sal = tsAt(fd.get('fecha'), fd.get('sal'));
+    if (sal <= a.entrada) return toast('La salida debe ser posterior a la entrada'); return run(() => DB.upd('asistencia', a.id, {salida: sal}), 'Salida guardada'); },
+  ot(fd) {
+    const id = +fd.get('id') || null, n = k => fd.get(k) === '' || fd.get(k) == null ? null : +fd.get(k);
+    const row = {numero: fd.get('numero').trim(), estado: fd.get('estado'), cliente: fd.get('cliente').trim(), descripcion: fd.get('descripcion') || null, cantidad: n('cantidad') || 1, unidad: fd.get('unidad') || 'pza',
+      terminadas: n('terminadas') || 0, fecha_entrega: fd.get('fecha_entrega') || null, ppto_horas: n('ppto_horas')};
+    if (S.d.ots.some(o => o.numero.toLowerCase() === row.numero.toLowerCase() && o.id !== id)) return toast('Ya existe una OT con ese número');
+    return run(async () => {
+      const o = id ? await DB.upd('ots', id, row) : await DB.ins('ots', row);
+      if (isAdmin() && ['ppto_hh', 'ppto_material', 'ppto_servicios', 'ppto_maquina', 'precio_venta'].some(k => fd.get(k) !== '')) {
+        await DB.upsert('ot_ppto', {ot_id: o.id, ppto_hh: n('ppto_hh') || 0, ppto_material: n('ppto_material') || 0, ppto_servicios: n('ppto_servicios') || 0, ppto_maquina: n('ppto_maquina') || 0, precio_venta: n('precio_venta') || 0});
+      }
+    }, id ? 'OT guardada' : 'OT creada');
+  },
+  serv(fd) {
+    const ext = fd.get('modo') === 'externo', cu = fd.get('cu');
+    const row = {ot_id: +fd.get('ot'), cantidad: +fd.get('cant'), doc_ref: fd.get('doc') || null, costo_unit: cu === '' || cu == null ? null : +cu};
+    if (!(row.cantidad > 0)) return toast('Indica la cantidad');
+    if (ext) Object.assign(row, {tipo: fd.get('tipo'), proveedor: fd.get('prov') || null, descripcion: fd.get('desc') || TIPOS_SERV[fd.get('tipo')], unidad: fd.get('unidad') || 'un'});
+    else row.proceso_id = +fd.get('proc');
+    return run(() => DB.ins('servicios', row), row.costo_unit == null && ext ? 'Registrado. Costo pendiente para administración' : 'Registrado');
+  },
+  consumo(fd) {
+    const dir = fd.get('origen') === 'compra_directa', cu = fd.get('cu');
+    const row = {ot_id: +fd.get('ot'), cantidad: +fd.get('cant'), origen: fd.get('origen'), doc_ref: fd.get('doc') || null};
+    if (!(row.cantidad > 0)) return toast('Indica la cantidad');
+    if (dir) { Object.assign(row, {descripcion: fd.get('desc'), unidad: fd.get('unidad') || 'un', costo_unit: cu === '' ? null : +cu}); if (!row.descripcion) return toast('Describe el material'); }
+    else { row.material_id = +fd.get('mat'); if (!row.material_id) return toast('Elige el material'); const m = byId(S.d.materiales, row.material_id); if (+m.stock < row.cantidad) toast(`Ojo: el stock queda negativo (${num(m.stock - row.cantidad, 2)} ${m.unidad})`); }
+    return run(() => DB.ins('consumos', row), 'Salida de material registrada');
+  },
+  ingreso(fd) {
+    const cu = fd.get('cu'); const row = {material_id: +fd.get('mat'), cantidad: +fd.get('cant'), costo_unit: cu === '' ? null : +cu, doc_ref: fd.get('doc') || null};
+    if (!row.material_id || !(row.cantidad > 0)) return toast('Elige material y cantidad');
+    return run(() => DB.ins('stock_ingresos', row), 'Ingreso registrado');
+  },
+  costo(fd) { const t = fd.get('t'), id = +fd.get('id'); return run(() => DB.upd(t, id, {costo_unit: +fd.get('cu'), estado_costo: fd.get('est') ? 'estimado' : 'real', doc_ref: fd.get('doc') || null}), 'Costo actualizado'); },
+  param(fd) { return run(async () => { for (const k of ['gg_pct', 'jornada_horas', 'colacion_min']) await DB.upsert('config', {clave: k, valor: +fd.get(k)}); }, 'Parámetros guardados'); },
+  async cat(fd) {
+    const k = fd.get('_k'), c = CAT[k], id = fd.get('_id');
+    const row = {};
+    c.fields.forEach(([f, , ty]) => { const v = fd.get(f); row[f] = ty === 'bool' ? !!v : ty === 'num' ? (v === '' ? null : +v) : ty === 'sel' ? (v === '' ? null : (/_id$/.test(f) ? +v : v)) : (v || null); });
+    if (k === 'tarifas' && row.costo_hh_extra == null && row.costo_hh != null) row.costo_hh_extra = Math.round(row.costo_hh * 1.5);
+    if (k === 'maquinas' && row.costo_hh == null) row.costo_hh = 0;
+    if (k === 'procesos' && row.costo_unit == null) row.costo_unit = 0;
+    if (k === 'materiales') { row.stock = row.stock ?? 0; row.stock_min = row.stock_min ?? 0; }
+    if (k === 'trabajadores' && id === '') {
+      const usuario = fd.get('usuario').trim().toLowerCase().replace(/\s+/g, '');
+      if (S.d.perfiles.some(p => p.usuario === usuario)) return toast('Ese usuario ya existe');
+      return run(async () => {
+        if (DEMO) { await DB.ins('perfiles', {...row, usuario}); return; }
+        const tmp = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {auth: {persistSession: false, autoRefreshToken: false, storageKey: 'tmp-signup'}});
+        const {data, error} = await tmp.auth.signUp({email: `${usuario}@${CONFIG.DOMINIO_USUARIOS}`, password: fd.get('clave'), options: {data: {nombre: row.nombre}}});
+        if (error) throw error;
+        await DB.upd('perfiles', data.user.id, {...row, activo: row.activo});
+      }, `Trabajador creado. Usuario: ${usuario}`);
+    }
+    const pkv = c.key ? id : (k === 'trabajadores' ? id : +id);
+    return run(() => id !== '' ? DB.upd(c.t, pkv, row) : DB.ins(c.t, row), 'Guardado');
+  }
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const fn = ACT[el.dataset.act]; if (!fn) return;
+  if (el.dataset.act === 'close-ov') return fn(el, e);
+  e.preventDefault(); fn(el, e);
+});
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault();
+  const btn = f.querySelector('button.pri'); if (btn) btn.disabled = true;
+  try { await FORMS[f.dataset.form](new FormData(f)); } finally { if (btn && btn.isConnected) btn.disabled = false; }
+});
+document.addEventListener('change', async e => {
+  const k = e.target.dataset?.change; if (!k) return;
+  if (k === 'demo-as') { S.demoAs = e.target.value; try { localStorage.setItem('taller-demo-as', S.demoAs); } catch (_) {} S.tab = null; reload(); }
+  if (k === 'val-fecha') { S.ui.valFecha = e.target.value || hoy(); if (!DEMO && S.ui.valFecha < addDays(hoy(), -62)) await mergeHH({desde: S.ui.valFecha, hasta: S.ui.valFecha}); render(); }
+  if (k === 'rep-d') { S.ui.repDesde = e.target.value; await repFetch(); render(); }
+  if (k === 'rep-h') { S.ui.repHasta = e.target.value; render(); }
+});
+document.addEventListener('input', e => {
+  const k = e.target.dataset?.input; if (!k) return;
+  const sel = document.getElementById(k === 'cs-buscar' ? 'cs-mat' : 'in-mat'), q = e.target.value.toLowerCase();
+  [...sel.options].forEach(o => o.hidden = q && !o.textContent.toLowerCase().includes(q));
+  const first = [...sel.options].find(o => !o.hidden); if (first && sel.selectedOptions[0]?.hidden !== false) sel.value = first.value;
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.me && !document.querySelector('.sheet')) reload(); });
+
+/* ================================================================ ARRANQUE */
+async function afterLogin(user) {
+  const {data} = await Cloud.sb.from('perfiles').select('*').eq('id', user.id).maybeSingle();
+  S.me = data || {id: user.id, nombre: user.email.split('@')[0], usuario: user.email.split('@')[0], rol: 'operario', activo: false};
+  await reload();
+}
+(async function start() {
+  if (DEMO) {
+    try { S.demoAs = localStorage.getItem('taller-demo-as'); } catch (e) {}
+    S.me = {id: 'p-admin'}; Demo.init();
+    if (!Demo.ready) return;
+    await reload();
+    return;
+  }
+  if (!window.supabase) { document.getElementById('app').innerHTML = '<div class="wrap"><div class="card login"><h2>Sin conexión</h2><p>No se pudo cargar la app. Revisa la conexión e inténtalo de nuevo.</p></div></div>'; return; }
+  Cloud.init();
+  const {data} = await Cloud.sb.auth.getSession();
+  if (data.session) await afterLogin(data.session.user); else render();
+})();
+</script>
