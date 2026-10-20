@@ -186,6 +186,7 @@ const hoy = () => ymd(Date.now());
 const hhmm = d => d ? new Date(d).toLocaleTimeString('es-CL', {timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false}) : '—';
 const clp = n => (n < 0 ? '−$' : '$') + Math.round(Math.abs(n || 0)).toLocaleString('es-CL');
 const num = (n, d = 1) => (+n || 0).toLocaleString('es-CL', {maximumFractionDigits: d});
+const kg = n => num(n, 0) + ' kg';
 const hrs = n => num(n, 1) + ' h';
 const pct = n => num(n, 0) + '%';
 const r2 = n => Math.round(n * 100) / 100;
@@ -215,7 +216,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -242,7 +243,8 @@ const Demo = (() => {
     servicios: () => ({tipo: 'otro', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, proceso_id: null, descripcion: null, unidad: null, proveedor: null, doc_ref: null, cantidad: 1}),
     stock_ingresos: () => ({fecha: hoy(), registrado_por: S.me.id, costo_unit: null, doc_ref: null}),
     asistencia: () => ({perfil_id: S.me.id, entrada: null, salida: null}),
-    ots: () => ({estado: 'en_proceso', cantidad: 1, terminadas: 0, unidad: 'pza', creada: new Date().toISOString()}),
+    ots: () => ({estado: 'en_proceso', cantidad: 1, terminadas: 0, kg_cotizados: null, kg_producidos: 0, unidad: 'pza', creada: new Date().toISOString()}),
+    produccion: () => ({fecha: hoy(), piezas: 0, nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
     materiales: () => ({stock: 0, stock_min: 0, activo: true, costo_estimado: false, unidad: 'un'}),
     perfiles: () => ({rol: 'operario', activo: true}),
     maquinas: () => ({activa: true, estimada: false, costo_hh: 0}),
@@ -292,10 +294,16 @@ const Demo = (() => {
       if (m) { m.stock = r2(+m.stock + +r.cantidad); if (r.costo_unit != null) { m.costo_unit = +r.costo_unit; m.costo_estimado = false; } }
     }
     if (t === 'hh_registros' && op === 'DELETE') T.hh_costo = T.hh_costo.filter(x => x.registro_id !== r.id);
+    if (t === 'produccion') totProd(r.ot_id);
+  }
+  function totProd(otId) {
+    const o = T.ots.find(x => x.id === otId); if (!o) return;
+    const ps = T.produccion.filter(x => x.ot_id === otId);
+    o.kg_producidos = r2(sum(ps, x => x.kg)); o.terminadas = sum(ps, x => x.piezas);
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || !T._v) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 2) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -315,7 +323,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 1, _seq: {}, config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 2, _seq: {}, produccion: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -354,11 +362,11 @@ const Demo = (() => {
     const today = hoy();
     const wd = []; for (let i = 0; wd.length < 7; i++) { const f = addDays(today, -i); if (dow(f) !== 0 && dow(f) !== 6) wd.unshift(f); }
     const ots = add('ots', [
-      {numero: 'OT-2611', cliente: 'Minera ejemplo', descripcion: 'Spools cañería 4" SCH40 con flanges, 6 m', cantidad: 40, terminadas: 22, unidad: 'spool', fecha_entrega: addDays(today, 9), ppto_horas: 230, creada: wd[0]},
-      {numero: 'OT-2614', cliente: 'Planta ejemplo', descripcion: 'Chute de traspaso con revestimiento antidesgaste', cantidad: 1, unidad: 'pza', fecha_entrega: addDays(today, 4), ppto_horas: 125, creada: wd[0]},
-      {numero: 'OT-2617', cliente: 'Fundición ejemplo', descripcion: 'Ejes SAE 4140 mecanizados y bonificados', cantidad: 12, terminadas: 5, unidad: 'eje', fecha_entrega: addDays(today, 14), ppto_horas: 95, creada: wd[1]},
-      {numero: 'OT-2609', cliente: 'Minera ejemplo', descripcion: 'Soportes de cañería galvanizados', cantidad: 60, terminadas: 60, unidad: 'pza', estado: 'terminada', fecha_entrega: wd[5], ppto_horas: 50, creada: addDays(today, -20)},
-      {numero: 'OT-2620', cliente: 'Planta ejemplo', descripcion: 'Estanque 5 m³ acero carbono (cotizado, sin iniciar)', cantidad: 1, unidad: 'pza', estado: 'cotizada', ppto_horas: 120, creada: today}]);
+      {numero: 'OT-2611', cliente: 'Minera ejemplo', descripcion: 'Spools cañería 4" SCH40 con flanges, 6 m', cantidad: 40, kg_cotizados: 4280, unidad: 'spool', fecha_entrega: addDays(today, 9), ppto_horas: 230, creada: wd[0]},
+      {numero: 'OT-2614', cliente: 'Planta ejemplo', descripcion: 'Chute de traspaso con revestimiento antidesgaste', cantidad: 1, kg_cotizados: 1850, unidad: 'pza', fecha_entrega: addDays(today, 4), ppto_horas: 125, creada: wd[0]},
+      {numero: 'OT-2617', cliente: 'Fundición ejemplo', descripcion: 'Ejes SAE 4140 mecanizados y bonificados', cantidad: 12, kg_cotizados: 150, unidad: 'eje', fecha_entrega: addDays(today, 14), ppto_horas: 95, creada: wd[1]},
+      {numero: 'OT-2609', cliente: 'Minera ejemplo', descripcion: 'Soportes de cañería galvanizados', cantidad: 60, kg_cotizados: 720, unidad: 'pza', estado: 'terminada', fecha_entrega: wd[5], ppto_horas: 50, creada: addDays(today, -20)},
+      {numero: 'OT-2620', cliente: 'Planta ejemplo', descripcion: 'Estanque 5 m³ acero carbono (cotizado, sin iniciar)', cantidad: 1, kg_cotizados: 2400, unidad: 'pza', estado: 'cotizada', ppto_horas: 120, creada: today}]);
     T.ot_ppto.push({ot_id: ots[0].id, ppto_hh: 1450000, ppto_material: 6400000, ppto_servicios: 1250000, ppto_maquina: 120000, precio_venta: 12800000},
       {ot_id: ots[1].id, ppto_hh: 780000, ppto_material: 1900000, ppto_servicios: 380000, ppto_maquina: 0, precio_venta: 4600000},
       {ot_id: ots[2].id, ppto_hh: 720000, ppto_material: 1100000, ppto_servicios: 420000, ppto_maquina: 380000, precio_venta: 3900000},
@@ -413,6 +421,11 @@ const Demo = (() => {
       const r = {...defaults.servicios(), id: nid('servicios'), ot_id: ot.id, proceso_id: p, cantidad: q, fecha: wd[2 + i % 3], registrado_por: 'p-jefe'}; before('servicios', r, null); T.servicios.push(r); });
     [[C, 'ensayo', 'Ensayo ultrasonido ejes', 'Laboratorio externo', 12, 'un', 18000, 'Fact. 1182'], [B, 'transporte', 'Flete a faena', 'Transportes ejemplo', 1, 'viaje', null, '']].forEach(([ot, tipo, d, prov, q, u, cu, doc]) => {
       const r = {...defaults.servicios(), id: nid('servicios'), ot_id: ot.id, tipo, descripcion: d, proveedor: prov, cantidad: q, unidad: u, costo_unit: cu, doc_ref: doc, fecha: wd[4], registrado_por: 'p-jefe'}; before('servicios', r, null); T.servicios.push(r); });
+    // producción terminada por día
+    [[A, 1, 535, 5], [A, 2, 642, 6], [A, 3, 428, 4], [A, 4, 749, 7], [A, 5, 535, 5], [A, 6, 321, 3],
+     [C, 3, 25, 2], [C, 5, 37.5, 3], [D, 0, 360, 30], [D, 1, 360, 30]].forEach(([ot, di, k, pz]) => {
+      T.produccion.push({...defaults.produccion(), id: nid('produccion'), ot_id: ot.id, fecha: wd[di], kg: k, piezas: pz, registrado_por: 'p-jefe'}); });
+    T.ots.forEach(o => totProd(o.id));
     S.me = saveMe;
     return T;
   }
@@ -430,8 +443,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios'];
-      const res = await Promise.all(simple.map(t => all(() => sb.from(t).select('*').order(PK[t] || 'id'))));
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion'];
+      const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return t === 'produccion' ? q.catch(() => []) : q; })); // produccion: tolera que falte la migración
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
       const [h1, h2, as, si] = await Promise.all([
@@ -532,8 +545,19 @@ function costOT(ot) {
   c.margen = p?.precio_venta ? +p.precio_venta - c.total : null;
   c.estPct = c.total ? (c.est / c.directo) * 100 : 0;
   c.avancePiezas = (+ot.terminadas || 0) / (+ot.cantidad || 1);
-  // proyección: costo actual escalado por avance de piezas, si hay piezas terminadas
-  c.proy = c.avancePiezas > 0.05 && c.avancePiezas < 1 ? c.total / c.avancePiezas : null;
+  c.kgCot = +ot.kg_cotizados || 0; c.kgProd = +ot.kg_producidos || 0;
+  c.avanceKg = c.kgCot ? c.kgProd / c.kgCot : null;
+  c.avance = c.avanceKg ?? c.avancePiezas;
+  c.avanceTxt = c.avanceKg != null ? 'de los kg' : 'de las piezas';
+  // proyección: costo actual escalado por el avance (kg si hay peso cotizado, si no piezas)
+  c.proy = c.avance > 0.05 && c.avance < 1 ? c.total / c.avance : null;
+  c.costoKg = c.kgProd ? c.total / c.kgProd : null;                 // costo a la fecha / kg producidos
+  c.proyKg = c.proy && c.kgCot ? c.proy / c.kgCot : c.avance >= 1 && c.kgProd ? c.total / c.kgProd : null;
+  c.pptoKg = c.kgCot ? c.pTotal / c.kgCot : null;
+  c.precioKg = c.kgCot && p?.precio_venta ? +p.precio_venta / c.kgCot : null;
+  c.hhKg = c.kgProd ? c.horas / c.kgProd : null;
+  c.hhKgPpto = c.kgCot && +ot.ppto_horas ? +ot.ppto_horas / c.kgCot : null;
+  c.prod = S.d.produccion.filter(x => x.ot_id === ot.id).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
   return c;
 }
 
@@ -549,7 +573,7 @@ function render() {
   if (!S.me) { app.innerHTML = vLogin(); return; }
   if (!S.me.activo && !DEMO) { app.innerHTML = vInactivo(); return; }
   const tabs = TABS[role()] || TABS.operario;
-  if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
+  if (!tabs.some(t => t[0] === (S.tab === 'ot' ? 'ots' : S.tab))) S.tab = tabs[0][0];
   const views = {dia: vDia, validar: vValidar, ots: vOTs, ot: vOTDetalle, servicios: vServicios, bodega: vBodega, resumen: vResumen, reportes: vReportes, ajustes: vAjustes};
   const cur = S.tab === 'ot' ? 'ots' : S.tab;
   app.innerHTML = `
@@ -739,7 +763,7 @@ function vOTs() {
   const filt = S.ui.otFiltro;
   const ots = S.d.ots.filter(o => filt === 'todas' || (filt === 'activas' ? ['en_proceso', 'cotizada'].includes(o.estado) : ['terminada', 'entregada'].includes(o.estado)))
     .sort((a, b) => (a.estado === 'en_proceso' ? 0 : 1) - (b.estado === 'en_proceso' ? 0 : 1) || (a.fecha_entrega || '9').localeCompare(b.fecha_entrega || '9'));
-  return `<div class="row between"><h1>Órdenes de trabajo</h1><button class="btn pri" data-act="ot-new">+ Nueva OT</button></div>
+  return `<div class="row between"><h1>Órdenes de trabajo</h1><div class="row"><button class="btn" data-act="prod-new">+ Registrar producción</button><button class="btn pri" data-act="ot-new">+ Nueva OT</button></div></div>
   <div class="seg" style="max-width:420px">${[['activas', 'Activas'], ['cerradas', 'Terminadas'], ['todas', 'Todas']].map(([k, l]) => `<button data-act="ot-filtro" data-k="${k}" aria-pressed="${filt === k}">${l}</button>`).join('')}</div>
   <div class="grid3">${ots.map(otCard).join('') || '<div class="empty">No hay OT en este filtro.</div>'}</div>`;
 }
@@ -752,14 +776,16 @@ function otCard(o) {
     <div><strong>${esc(o.descripcion || '')}</strong><div class="small muted">${esc(o.cliente)} · ${num(o.cantidad, 0)} ${esc(o.unidad)}${o.fecha_entrega ? ` · entrega ${fechaTxt(o.fecha_entrega)}` : ''}</div></div>
     <div><div class="row between small"><span>HH ${hrs(c.horas)}${ph ? ` de ${hrs(ph)}` : ''}</span><span class="muted">${ph ? pct(ratio * 100) : ''}</span></div>
       <div class="bar"><i class="${ratio > 1 ? 'over' : ratio > .9 ? 'warn' : ''}" style="width:${Math.min(100, ratio * 100)}%"></i></div></div>
-    ${+o.cantidad > 1 ? `<div><div class="row between small"><span>Piezas terminadas ${num(o.terminadas, 0)} de ${num(o.cantidad, 0)}</span><span class="muted">${pct(c.avancePiezas * 100)}</span></div><div class="bar"><i style="width:${Math.min(100, c.avancePiezas * 100)}%;background:var(--ok)"></i></div></div>` : ''}
+    ${c.kgCot ? `<div><div class="row between small"><span>Producido ${kg(c.kgProd)} de ${kg(c.kgCot)}</span><span class="muted">${pct(c.avanceKg * 100)}</span></div><div class="bar"><i style="width:${Math.min(100, c.avanceKg * 100)}%;background:var(--ok)"></i></div></div>`
+      : +o.cantidad > 1 ? `<div><div class="row between small"><span>Piezas terminadas ${num(o.terminadas, 0)} de ${num(o.cantidad, 0)}</span><span class="muted">${pct(c.avancePiezas * 100)}</span></div><div class="bar"><i style="width:${Math.min(100, c.avancePiezas * 100)}%;background:var(--ok)"></i></div></div>` : ''}
     ${isAdmin() ? `<div><div class="row between small"><span>Costo ${clp(c.total)}${c.pTotal ? ` de ${clp(c.pTotal)}` : ''}</span><span class="muted">${c.pTotal ? pct(ratioC * 100) : ''}</span></div>
       <div class="bar"><i class="${ratioC > 1 ? 'over' : ratioC > .9 ? 'warn' : ''}" style="width:${Math.min(100, ratioC * 100)}%"></i></div></div>` : ''}
     <div class="row" style="gap:6px">${atras ? '<span class="chip bad">Atrasada</span>' : ''}${c.abiertas ? `<span class="chip run"><span class="dot"></span> ${c.abiertas} trabajando</span>` : ''}
       ${c.horasRet ? `<span class="chip bad">${hrs(c.horasRet)} retrabajo</span>` : ''}
       ${isAdmin() && c.pendientes ? `<span class="chip warn">${c.pendientes} costos sin dato</span>` : ''}
       ${isAdmin() && c.estPct >= 1 ? `<span class="chip est">${pct(c.estPct)} estimado</span>` : ''}
-      ${isAdmin() && c.margen != null && o.estado !== 'cotizada' ? `<span class="chip ${c.margen < 0 ? 'bad' : 'ok'}">Margen ${clp(c.margen)}</span>` : ''}</div>
+      ${isAdmin() && c.margen != null && o.estado !== 'cotizada' ? `<span class="chip ${c.margen < 0 ? 'bad' : 'ok'}">Margen ${clp(c.margen)}</span>` : ''}
+      ${isAdmin() && c.proyKg ? `<span class="chip ${c.pptoKg && c.proyKg > c.pptoKg ? 'bad' : ''}">${clp(c.proyKg)}/kg proyectado</span>` : ''}</div>
   </button>`;
 }
 function vOTDetalle() {
@@ -774,12 +800,12 @@ function vOTDetalle() {
   return `
   <div class="row"><button class="btn ghost" data-act="tab" data-k="ots">‹ Órdenes de trabajo</button></div>
   <div class="row between"><div><div class="row"><span class="ot" style="font-size:1.1rem">${esc(o.numero)}</span><span class="chip acc">${ESTADOS_OT[o.estado]}</span></div>
-     <h1 style="margin-top:6px">${esc(o.descripcion || '')}</h1><div class="muted">${esc(o.cliente)} · ${num(o.cantidad, 0)} ${esc(o.unidad)}${o.fecha_entrega ? ` · entrega ${fechaTxt(o.fecha_entrega)}` : ''}</div></div>
+     <h1 style="margin-top:6px">${esc(o.descripcion || '')}</h1><div class="muted">${esc(o.cliente)} · ${num(o.cantidad, 0)} ${esc(o.unidad)}${c.kgCot ? ` · ${kg(c.kgCot)}` : ''}${o.fecha_entrega ? ` · entrega ${fechaTxt(o.fecha_entrega)}` : ''}</div></div>
     <div class="row"><button class="btn" data-act="ot-edit" data-id="${o.id}">Editar OT</button>${adm ? `<button class="btn" data-act="ot-csv" data-id="${o.id}">Exportar detalle</button>` : ''}</div></div>
   ${adm ? `<div class="grid2">
     <div class="card"><div class="label">Costo real a la fecha</div><div class="big">${clp(c.total)}</div>
       <div class="small muted">${c.p ? `Presupuesto ${clp(c.pTotal)} · ` : ''}${num(o.cantidad, 0) > 1 ? `${clp(c.unit)} por ${esc(o.unidad)} sobre ${num(o.cantidad, 0)}` : ''}</div>
-      ${c.proy ? `<div class="small">Proyección al terminar (según ${pct(c.avancePiezas * 100)} de piezas): <strong>${clp(c.proy)}</strong></div>` : ''}
+      ${c.proy ? `<div class="small">Proyección al terminar (según ${pct(c.avance * 100)} ${c.avanceTxt}): <strong>${clp(c.proy)}</strong></div>` : ''}
       <div class="row">${c.margen != null ? `<span class="chip ${c.margen < 0 ? 'bad' : 'ok'}">Margen actual ${clp(c.margen)} (${pct(c.margen / p.precio_venta * 100)})</span>` : ''}
         ${c.estPct >= 1 ? `<span class="chip est">${pct(c.estPct)} del costo es estimado</span>` : ''}${c.pendientes ? `<span class="chip warn">${c.pendientes} ítems sin costo</span>` : ''}
         ${c.horasPend ? `<span class="chip">${hrs(c.horasPend)} sin aprobar</span>` : ''}</div></div>
@@ -789,6 +815,7 @@ function vOTDetalle() {
       <tr><td><strong>Total</strong></td><td class="n"><strong>${clp(c.total)}</strong></td>${c.p ? `<td class="n"><strong>${clp(c.pTotal)}</strong></td><td class="n"><strong>${clp(c.total - c.pTotal)}</strong></td>` : ''}</tr>
       </tbody></table></div>
       <div class="small muted">Horas extra: ${hrs(c.horasExtra)} = ${clp(c.extra)}. Retrabajo: ${hrs(c.horasRet)} = ${clp(c.ret)}.${c.p ? '' : ' Sin cotización cargada: edita la OT para ingresarla.'}</div></div></div>` : ''}
+  ${vProduccionOT(o, c, adm)}
   <div class="grid2">
     <div class="card"><div class="row between"><h3>Horas hombre</h3><span class="muted small">${hrs(c.horas)}${+o.ppto_horas ? ` de ${hrs(o.ppto_horas)} cotizadas` : ''}</span></div>
       ${Object.entries(porOp).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><div class="row between small"><span>${esc(k)}</span><span>${hrs(v)}</span></div><div class="bar"><i style="width:${v / maxOp * 100}%"></i></div></div>`).join('') || '<div class="empty">Sin horas registradas.</div>'}
@@ -802,6 +829,36 @@ function vOTDetalle() {
       <button class="btn ghost" data-act="serv-new" data-ot="${o.id}">+ Registrar servicio</button></div>
   </div>`;
 }
+function vProduccionOT(o, c, adm) {
+  const fila = (l, v, ref) => `<span class="muted">${l}</span><span class="v">${v}${ref ? ` <span class="muted tiny">cotizado ${ref}</span>` : ''}</span>`;
+  return `<div class="card"><div class="row between"><h3>Producción</h3><button class="btn" data-act="prod-new" data-ot="${o.id}">+ Registrar producción</button></div>
+    <div class="grid2" style="gap:16px">
+      <div style="display:grid;gap:8px;align-content:start"><div class="big">${kg(c.kgProd)}</div>
+        <div class="small muted">${c.kgCot ? `de ${kg(c.kgCot)} cotizados · ${pct(c.avanceKg * 100)}` : 'Sin peso cotizado: edita la OT e ingresa los kg totales.'}${+o.terminadas ? ` · ${num(o.terminadas, 0)} de ${num(o.cantidad, 0)} ${esc(o.unidad)}` : ''}</div>
+        ${c.kgCot ? `<div class="bar"><i style="width:${Math.min(100, c.avanceKg * 100)}%;background:var(--ok)"></i></div>` : ''}</div>
+      <div class="kv small">
+        ${fila('HH por kg', c.hhKg != null ? num(c.hhKg, 3) + ' HH/kg' : '—', c.hhKgPpto != null ? num(c.hhKgPpto, 3) : '')}
+        ${adm ? fila('Costo por kg producido', c.costoKg != null ? clp(c.costoKg) : '—', c.pptoKg ? clp(c.pptoKg) : '') : ''}
+        ${adm && c.proyKg ? fila('Costo por kg proyectado al terminar', `<strong>${clp(c.proyKg)}</strong>`) : ''}
+        ${adm && c.precioKg ? fila('Precio de venta por kg', clp(c.precioKg)) : ''}
+        ${adm && c.precioKg && c.kgProd ? fila('Venta de lo producido', clp(c.precioKg * c.kgProd)) : ''}
+      </div></div>
+    ${adm && c.costoKg && c.avance < 0.95 ? '<p class="tiny muted">El costo por kg producido incluye trabajo aún en curso, por eso parte alto y baja a medida que se terminan kilos. El proyectado es la mejor estimación del valor final.</p>' : ''}
+    ${c.prod.length ? `<details><summary class="small">Registros de producción (${c.prod.length})</summary><div class="list" style="margin-top:6px">${c.prod.map(x => `<div class="item"><div class="t">${fechaTxt(x.fecha)}${+x.piezas ? ` · ${num(x.piezas, 0)} ${esc(o.unidad)}` : ''}<div class="small muted">${esc(perfil(x.registrado_por)?.nombre || '')}${x.nota ? ' · ' + esc(x.nota) : ''}</div></div>
+      <div class="row" style="gap:4px"><strong>${kg(x.kg)}</strong><button class="btn ghost danger" data-act="prod-del" data-id="${x.id}" aria-label="Eliminar registro">✕</button></div></div>`).join('')}</div></details>` : ''}
+  </div>`;
+}
+function sheetProduccion(otId) {
+  const ots = S.d.ots.filter(o => ['en_proceso', 'terminada'].includes(o.estado) || o.id === otId);
+  openModal('Registrar producción', `<form data-form="prod">
+    <label class="f"><span>OT</span><select name="ot" id="pr-ot" required><option value="">Elegir…</option>${ots.map(o => `<option value="${o.id}" ${o.id === otId ? 'selected' : ''}>${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
+    <div class="fgrid"><label class="f"><span>Kg terminados</span><input type="number" name="kg" id="pr-kg" step="any" min="0.01" required inputmode="decimal"></label>
+      <label class="f"><span>Piezas (opcional)</span><input type="number" name="piezas" id="pr-pz" step="any" min="0" inputmode="decimal"></label>
+      <label class="f"><span>Fecha</span><input type="date" name="fecha" id="pr-f" value="${hoy()}" max="${hoy()}" required></label></div>
+    <label class="f"><span>Nota (opcional)</span><input type="text" name="nota" id="pr-n" placeholder="Ej.: spools 21 al 26, guía de despacho 812"></label>
+    <p class="small muted">Registra solo lo terminado (listo para despacho o para pintura final). Los kg se suman al total de la OT.</p>
+    <button class="btn pri xl">Guardar</button></form>`);
+}
 function sheetOT(o) {
   o = o || {estado: 'en_proceso', cantidad: 1, unidad: 'pza', terminadas: 0};
   const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || {};
@@ -813,7 +870,7 @@ function sheetOT(o) {
     <label class="f"><span>Descripción</span><input type="text" name="descripcion" id="ot-d" value="${esc(o.descripcion || '')}"></label>
     <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cantidad" id="ot-q" min="1" step="any" value="${v(o.cantidad)}" required></label>
       <label class="f"><span>Unidad</span><input type="text" name="unidad" id="ot-u" value="${esc(o.unidad || 'pza')}" placeholder="pza, spool, m"></label>
-      <label class="f"><span>Terminadas</span><input type="number" name="terminadas" id="ot-t" min="0" step="any" value="${v(o.terminadas)}"></label>
+      <label class="f"><span>Kg totales cotizados</span><input type="number" name="kg_cotizados" id="ot-kg" min="0" step="any" value="${v(o.kg_cotizados)}" inputmode="decimal"></label>
       <label class="f"><span>Entrega</span><input type="date" name="fecha_entrega" id="ot-f" value="${v(o.fecha_entrega)}"></label>
       <label class="f"><span>HH cotizadas</span><input type="number" name="ppto_horas" id="ot-h" min="0" step="any" value="${v(o.ppto_horas)}"></label></div>
     ${isAdmin() ? `<div class="label">Cotización (solo administración)</div><div class="fgrid">
@@ -822,7 +879,7 @@ function sheetOT(o) {
       <label class="f"><span>Servicios $</span><input type="number" name="ppto_servicios" id="ot-p3" min="0" value="${v(p.ppto_servicios)}"></label>
       <label class="f"><span>Máquinas $</span><input type="number" name="ppto_maquina" id="ot-p4" min="0" value="${v(p.ppto_maquina)}"></label>
       <label class="f"><span>Precio de venta $</span><input type="number" name="precio_venta" id="ot-p5" min="0" value="${v(p.precio_venta)}"></label></div>
-      <p class="small muted">Montos de costo directo, sin gastos generales. La app suma ${cfg('gg_pct')}% de gastos generales a ambos lados.</p>` : ''}
+      <p class="small muted">Montos de costo directo, sin gastos generales. La app suma ${cfg('gg_pct')}% de gastos generales a ambos lados. Con los kg cotizados calcula el precio y el costo por kg.</p>` : ''}
     <div class="row"><button class="btn pri">Guardar</button>${o.id && isAdmin() ? `<button type="button" class="btn danger" data-act="ot-del" data-id="${o.id}">Eliminar</button>` : ''}</div></form>`);
 }
 
@@ -913,6 +970,13 @@ function vResumen() {
   const sinCosto = sum(cs, x => x.c.pendientes);
   const totReal = sum(cs, x => x.c.total), totPpto = sum(cs, x => x.c.pTotal), totVenta = sum(cs, x => +x.c.p?.precio_venta || 0);
   const trabajando = S.d.hh.filter(r => !closed(r) && r.fecha === hoy()).length;
+  const kgEn = (d, h) => sum(S.d.produccion.filter(x => x.fecha >= d && x.fecha <= h), x => x.kg);
+  const mes0 = hoy().slice(0, 8) + '01';
+  const kgHoy = kgEn(hoy(), hoy()), kg7 = kgEn(desde, hoy()), kgMes = kgEn(mes0, hoy());
+  const hhDir7 = sum(hh7.filter(r => r.tipo === 'directa' || r.tipo === 'retrabajo'), r => r.horas);
+  const dias7 = []; for (let i = 6; i >= 0; i--) dias7.push(addDays(hoy(), -i));
+  const kgDia = dias7.map(f => [f, kgEn(f, f)]), maxDia = Math.max(1, ...kgDia.map(x => x[1]));
+  const kgCotAct = sum(cs, x => x.c.kgCot), kgProdAct = sum(cs, x => x.c.kgProd);
   return `
   <div class="row between"><div><div class="label">${fechaTxt(hoy())}</div><h1>Resumen del taller</h1></div><span class="chip run"><span class="dot"></span> ${trabajando} personas trabajando ahora</span></div>
   <div class="grid2">
@@ -923,9 +987,19 @@ function vResumen() {
       ${sinCuadrar.length ? `<div class="item"><div class="t">${sinCuadrar.length} ${sinCuadrar.length === 1 ? 'día-persona' : 'días-persona'} sin cuadrar esta semana<div class="small muted">${[...new Set(sinCuadrar.map(x => x.p.nombre))].slice(0, 4).map(esc).join(', ')}</div></div><button class="btn ghost" data-act="go-validar" data-f="${sinCuadrar[0].f}">Revisar</button></div>` : ''}
       ${bajo.length ? `<div class="item"><div class="t">${bajo.length} materiales bajo mínimo<div class="small muted">${bajo.slice(0, 3).map(m => esc(m.nombre)).join(', ')}</div></div><button class="btn ghost" data-act="go-stock">Ver stock</button></div>` : ''}
       ${cs.filter(x => x.o.fecha_entrega && x.o.fecha_entrega < hoy()).map(x => `<div class="item"><div class="t"><span class="ot">${esc(x.o.numero)}</span> atrasada</div><span class="small muted">entrega ${fechaTxt(x.o.fecha_entrega)}</span></div>`).join('')}
-      ${cs.filter(x => x.c.pTotal && x.c.total > x.c.pTotal * .9).map(x => `<div class="item"><div class="t"><span class="ot">${esc(x.o.numero)}</span> lleva ${pct(x.c.total / x.c.pTotal * 100)} del presupuesto</div><span class="small muted">${pct(x.c.avancePiezas * 100)} piezas</span></div>`).join('')}
+      ${cs.filter(x => x.c.pTotal && x.c.total > x.c.pTotal * .9).map(x => `<div class="item"><div class="t"><span class="ot">${esc(x.o.numero)}</span> lleva ${pct(x.c.total / x.c.pTotal * 100)} del presupuesto</div><span class="small muted">avance ${pct(Math.min(1, x.c.avance) * 100)} ${x.c.avanceTxt}</span></div>`).join('')}
       ${!sinCuadrar.length && !bajo.length ? '<div class="small muted">Sin alertas.</div>' : ''}</div></div>
   </div>
+  <div class="card"><div class="row between"><h2>Producción</h2><button class="btn" data-act="prod-new">+ Registrar producción</button></div>
+    <div class="row" style="gap:28px;align-items:flex-start">
+      <div><div class="label">Hoy</div><div class="big">${kg(kgHoy)}</div></div>
+      <div><div class="label">Últimos 7 días</div><div class="big">${kg(kg7)}</div><div class="small muted">${kg7 ? `${num(hhDir7 / kg7, 3)} HH/kg` : ''}</div></div>
+      <div><div class="label">Este mes</div><div class="big">${kg(kgMes)}</div></div>
+      <div><div class="label">OT en proceso</div><div class="big">${kg(kgProdAct)}</div><div class="small muted">${kgCotAct ? `de ${kg(kgCotAct)} cotizados · ${pct(kgProdAct / kgCotAct * 100)}` : ''}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:110px" role="img" aria-label="Kg producidos por día, últimos 7 días">
+      ${kgDia.map(([f, v]) => `<div style="display:grid;gap:4px;align-content:end;height:100%;text-align:center"><span class="tiny" style="font-weight:600">${v ? num(v, 0) : ''}</span><i style="display:block;height:${Math.max(v ? 3 : 1, v / maxDia * 70)}px;background:${v ? 'var(--ok)' : 'var(--line)'};border-radius:3px 3px 0 0"></i><span class="tiny muted">${fechaTxt(f).split(',')[0]}</span></div>`).join('')}
+    </div></div>
   <h2>OT en proceso</h2>
   <div class="grid3">${act.map(otCard).join('') || '<div class="empty">No hay OT en proceso.</div>'}</div>
   <h2>Últimos 7 días</h2>
@@ -967,9 +1041,14 @@ function vReportes() {
     <tr><td><strong>Total</strong></td><td></td><td></td><td class="n">${num(T('directa'))}</td><td class="n">${num(T('retrabajo'))}</td><td class="n">${num(T('indirecta'))}</td><td class="n">${num(T('improductiva'))}</td><td class="n"><strong>${num(T('total'))}</strong></td><td class="n">${num(T('extra'))}</td><td class="n">${clp(T('costo'))}</td><td></td></tr>
     </tbody></table></div>
     <p class="small muted">Productividad: ${pct(T('directa') / (T('total') || 1) * 100)} de las horas fueron directas en OT. Retrabajo ${pct(T('retrabajo') / (T('total') || 1) * 100)}.</p></div>
+  ${(() => { const ps = S.d.produccion.filter(x => x.fecha >= d && x.fecha <= h); const por = {}; ps.forEach(x => por[x.ot_id] = (por[x.ot_id] || 0) + +x.kg);
+    const hhD = sum(S.d.hh.filter(r => r.fecha >= d && r.fecha <= h && closed(r) && (r.tipo === 'directa' || r.tipo === 'retrabajo')), r => r.horas), tk = sum(ps, x => x.kg);
+    return `<div class="card"><div class="row between"><h2>Producción del período</h2><button class="btn" data-act="csv-prod">Exportar</button></div>
+      <div class="row" style="gap:28px"><div><div class="label">Kg producidos</div><div class="big">${kg(tk)}</div></div><div><div class="label">HH directas por kg</div><div class="big">${tk ? num(hhD / tk, 3) : '—'}</div></div></div>
+      <div class="kv small">${Object.entries(por).sort((a, b) => b[1] - a[1]).map(([id, v]) => `<span><span class="ot">${esc(otOf(+id)?.numero)}</span> ${esc(otOf(+id)?.descripcion || '')}</span><span class="v">${kg(v)}</span>`).join('') || '<span class="muted">Sin producción registrada en el período.</span>'}</div></div>`; })()}
   <div class="card"><div class="row between"><h2>Costo por OT</h2><button class="btn" data-act="csv-ots">Exportar para el ERP</button></div>
-    <div class="tbl-wrap"><table><thead><tr><th>OT</th><th>Cliente</th><th>Estado</th><th class="n">HH</th><th class="n">M. obra</th><th class="n">Máquinas</th><th class="n">Materiales</th><th class="n">Servicios</th><th class="n">GG</th><th class="n">Total</th><th class="n">Cotizado</th><th class="n">Venta</th><th class="n">Margen</th></tr></thead><tbody>
-    ${S.d.ots.map(o => { const c = costOT(o); return `<tr class="click" data-act="ot-open" data-id="${o.id}"><td><span class="ot">${esc(o.numero)}</span></td><td>${esc(o.cliente)}</td><td>${ESTADOS_OT[o.estado]}</td><td class="n">${num(c.horas)}</td><td class="n">${clp(c.mo + c.extra)}</td><td class="n">${clp(c.maq)}</td><td class="n">${clp(c.mat)}</td><td class="n">${clp(c.serv)}</td><td class="n">${clp(c.gg)}</td><td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${clp(c.pTotal)}</td><td class="n">${clp(c.p?.precio_venta)}</td><td class="n" style="color:${(c.margen || 0) < 0 ? 'var(--bad)' : 'inherit'}">${c.margen == null ? '—' : clp(c.margen)}</td></tr>`; }).join('')}
+    <div class="tbl-wrap"><table><thead><tr><th>OT</th><th>Cliente</th><th>Estado</th><th class="n">HH</th><th class="n">M. obra</th><th class="n">Máquinas</th><th class="n">Materiales</th><th class="n">Servicios</th><th class="n">GG</th><th class="n">Total</th><th class="n">Cotizado</th><th class="n">Venta</th><th class="n">Margen</th><th class="n">Kg cotiz.</th><th class="n">Kg prod.</th><th class="n">$/kg proy.</th><th class="n">$/kg cotiz.</th></tr></thead><tbody>
+    ${S.d.ots.map(o => { const c = costOT(o); return `<tr class="click" data-act="ot-open" data-id="${o.id}"><td><span class="ot">${esc(o.numero)}</span></td><td>${esc(o.cliente)}</td><td>${ESTADOS_OT[o.estado]}</td><td class="n">${num(c.horas)}</td><td class="n">${clp(c.mo + c.extra)}</td><td class="n">${clp(c.maq)}</td><td class="n">${clp(c.mat)}</td><td class="n">${clp(c.serv)}</td><td class="n">${clp(c.gg)}</td><td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${clp(c.pTotal)}</td><td class="n">${clp(c.p?.precio_venta)}</td><td class="n" style="color:${(c.margen || 0) < 0 ? 'var(--bad)' : 'inherit'}">${c.margen == null ? '—' : clp(c.margen)}</td><td class="n">${c.kgCot ? num(c.kgCot, 0) : '—'}</td><td class="n">${num(c.kgProd, 0)}</td><td class="n">${c.proyKg ? clp(c.proyKg) : '—'}</td><td class="n">${c.pptoKg ? clp(c.pptoKg) : '—'}</td></tr>`; }).join('')}
     </tbody></table></div>
     <p class="small muted">Las OT entregadas hace más de 2 meses traen sus horas al abrirlas.</p></div>`;
 }
@@ -1097,6 +1176,11 @@ const ACT = {
       ...c.servL.map(x => [TIPOS_SERV[x.tipo], x.fecha, x.descripcion, x.proveedor || 'propio', +x.cantidad, x.unidad, '', +x.total, x.estado_costo]),
       ['Gastos generales', '', `${cfg('gg_pct')}% del costo directo`, '', '', '', '', c.gg, '']]); },
   'serv-new': el => sheetServicio(+el.dataset.ot || null),
+  'prod-new': el => sheetProduccion(+el.dataset.ot || (S.tab === 'ot' ? S.ui.otId : null)),
+  'prod-del': el => { const x = byId(S.d.produccion, +el.dataset.id); openModal('Eliminar registro de producción', `<p>¿Eliminar ${kg(x.kg)} del ${fechaTxt(x.fecha)}? Se descuentan del total de la OT.</p><div class="row"><button class="btn danger" data-act="prod-del-ok" data-id="${x.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`); },
+  'prod-del-ok': el => run(() => DB.del('produccion', +el.dataset.id), 'Registro eliminado'),
+  'csv-prod': () => { const {d, h} = repData(); csv(`produccion-${d}-a-${h}.csv`, ['Fecha', 'OT', 'Cliente', 'Descripción', 'Kg', 'Piezas', 'Nota', 'Registrado por'],
+    S.d.produccion.filter(x => x.fecha >= d && x.fecha <= h).sort((a, b) => a.fecha.localeCompare(b.fecha)).map(x => { const o = otOf(x.ot_id); return [x.fecha, o?.numero, o?.cliente, o?.descripcion || '', +x.kg, +x.piezas, x.nota || '', perfil(x.registrado_por)?.nombre || '']; })); },
   'sv-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const ext = el.dataset.k === 'externo';
     document.getElementById('sv-modo').value = el.dataset.k; document.getElementById('sv-prop').hidden = ext; document.getElementById('sv-ext').hidden = !ext; },
   'cs-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const d = el.dataset.k === 'compra_directa';
@@ -1115,8 +1199,8 @@ const ACT = {
   'csv-rep': () => { const {d, h, rows} = repData();
     csv(`horas-${d}-a-${h}.csv`, ['Trabajador', 'Usuario', 'Categoría', 'Días', 'HH directas', 'HH retrabajo', 'HH indirectas', 'HH esperas', 'HH total', 'Horas extra', 'Costo HH', 'Registros sin aprobar'],
       rows.map(r => [r.p.nombre, r.p.usuario || '', byId(S.d.tarifas, r.p.tarifa_id)?.nombre || '', r.dias, r.directa, r.retrabajo, r.indirecta, r.improductiva, r.total, r.extra, Math.round(r.costo), r.pend])); },
-  'csv-ots': () => csv(`costo-ot-${hoy()}.csv`, ['OT', 'Cliente', 'Descripción', 'Estado', 'Cantidad', 'Unidad', 'HH', 'HH extra', 'Mano de obra', 'Máquinas', 'Materiales', 'Servicios', 'Gastos generales', 'Costo total', 'Costo unitario', 'Cotizado', 'Precio venta', 'Margen', '% estimado', 'Ítems sin costo'],
-      S.d.ots.map(o => { const c = costOT(o); return [o.numero, o.cliente, o.descripcion || '', ESTADOS_OT[o.estado], +o.cantidad, o.unidad, c.horas, c.horasExtra, Math.round(c.mo + c.extra), Math.round(c.maq), Math.round(c.mat), Math.round(c.serv), Math.round(c.gg), Math.round(c.total), Math.round(c.unit), Math.round(c.pTotal), +c.p?.precio_venta || 0, c.margen == null ? '' : Math.round(c.margen), Math.round(c.estPct), c.pendientes]; })),
+  'csv-ots': () => csv(`costo-ot-${hoy()}.csv`, ['OT', 'Cliente', 'Descripción', 'Estado', 'Cantidad', 'Unidad', 'HH', 'HH extra', 'Mano de obra', 'Máquinas', 'Materiales', 'Servicios', 'Gastos generales', 'Costo total', 'Costo unitario', 'Cotizado', 'Precio venta', 'Margen', '% estimado', 'Ítems sin costo', 'Kg cotizados', 'Kg producidos', 'Costo por kg producido', 'Costo por kg proyectado', 'Costo por kg cotizado', 'Precio por kg', 'HH por kg'],
+      S.d.ots.map(o => { const c = costOT(o); return [o.numero, o.cliente, o.descripcion || '', ESTADOS_OT[o.estado], +o.cantidad, o.unidad, c.horas, c.horasExtra, Math.round(c.mo + c.extra), Math.round(c.maq), Math.round(c.mat), Math.round(c.serv), Math.round(c.gg), Math.round(c.total), Math.round(c.unit), Math.round(c.pTotal), +c.p?.precio_venta || 0, c.margen == null ? '' : Math.round(c.margen), Math.round(c.estPct), c.pendientes, c.kgCot || '', c.kgProd, c.costoKg == null ? '' : Math.round(c.costoKg), c.proyKg == null ? '' : Math.round(c.proyKg), c.pptoKg == null ? '' : Math.round(c.pptoKg), c.precioKg == null ? '' : Math.round(c.precioKg), c.hhKg == null ? '' : Math.round(c.hhKg * 1000) / 1000]; })),
   'csv-stock': () => csv(`stock-${hoy()}.csv`, ['Código', 'Material', 'Unidad', 'Stock', 'Mínimo', 'Costo unitario', 'Valor'], S.d.materiales.map(m => [m.codigo || '', m.nombre, m.unidad, +m.stock, +m.stock_min, m.costo_unit == null ? '' : +m.costo_unit, m.costo_unit == null ? '' : Math.round(m.stock * m.costo_unit)]))
 };
 function sheetAsisPropia(a) {
@@ -1168,7 +1252,7 @@ const FORMS = {
   ot(fd) {
     const id = +fd.get('id') || null, n = k => fd.get(k) === '' || fd.get(k) == null ? null : +fd.get(k);
     const row = {numero: fd.get('numero').trim(), estado: fd.get('estado'), cliente: fd.get('cliente').trim(), descripcion: fd.get('descripcion') || null, cantidad: n('cantidad') || 1, unidad: fd.get('unidad') || 'pza',
-      terminadas: n('terminadas') || 0, fecha_entrega: fd.get('fecha_entrega') || null, ppto_horas: n('ppto_horas')};
+      kg_cotizados: n('kg_cotizados'), fecha_entrega: fd.get('fecha_entrega') || null, ppto_horas: n('ppto_horas')};
     if (S.d.ots.some(o => o.numero.toLowerCase() === row.numero.toLowerCase() && o.id !== id)) return toast('Ya existe una OT con ese número');
     return run(async () => {
       const o = id ? await DB.upd('ots', id, row) : await DB.ins('ots', row);
@@ -1197,6 +1281,13 @@ const FORMS = {
     const cu = fd.get('cu'); const row = {material_id: +fd.get('mat'), cantidad: +fd.get('cant'), costo_unit: cu === '' ? null : +cu, doc_ref: fd.get('doc') || null};
     if (!row.material_id || !(row.cantidad > 0)) return toast('Elige material y cantidad');
     return run(() => DB.ins('stock_ingresos', row), 'Ingreso registrado');
+  },
+  prod(fd) {
+    const row = {ot_id: +fd.get('ot'), kg: +fd.get('kg'), piezas: +fd.get('piezas') || 0, fecha: fd.get('fecha'), nota: fd.get('nota') || null};
+    if (!row.ot_id) return toast('Elige la OT'); if (!(row.kg > 0)) return toast('Indica los kg');
+    const o = otOf(row.ot_id), c = costOT(o);
+    if (c.kgCot && c.kgProd + row.kg > c.kgCot * 1.1) toast(`Ojo: la OT queda con ${kg(c.kgProd + row.kg)}, más que los ${kg(c.kgCot)} cotizados`);
+    return run(() => DB.ins('produccion', row), `${kg(row.kg)} registrados en ${o.numero}`);
   },
   costo(fd) { const t = fd.get('t'), id = +fd.get('id'); return run(() => DB.upd(t, id, {costo_unit: +fd.get('cu'), estado_costo: fd.get('est') ? 'estimado' : 'real', doc_ref: fd.get('doc') || null}), 'Costo actualizado'); },
   param(fd) { return run(async () => { for (const k of ['gg_pct', 'jornada_horas', 'colacion_min']) await DB.upsert('config', {clave: k, valor: +fd.get(k)}); }, 'Parámetros guardados'); },
