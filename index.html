@@ -226,8 +226,8 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: []},
-  ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', repDesde: null, repHasta: null, ajTab: 'trabajadores'}
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: []},
+  ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
 const role = () => S.me?.rol;
@@ -250,6 +250,9 @@ function grupoInfo(g, mats = S.d.materiales) {
   const kgu = conK.length === items.length && conK.length ? (sk > 0 ? sum(conK, m => Math.max(0, +m.stock) * m.kg_unidad) / sk : sum(conK, m => +m.kg_unidad) / conK.length) : null;
   return {g, unidad, items, all, stock: sum(items, m => +m.stock), stockMin: sum(items, m => +m.stock_min), cpp, kgu, est: conC.some(m => m.costo_estimado), mixto: all.length !== items.length};
 }
+const salidasLinea = l => S.d.consumos.filter(c => c.ot_stock_id === l.id);
+const saldoLinea = l => r2(+l.cantidad - +(l.traspasado || 0) - sum(salidasLinea(l), c => c.cantidad));
+const kgLinea = (l, cant) => l.kg_unidad != null ? r2(cant * l.kg_unidad) : String(l.unidad).toLowerCase() === 'kg' ? +cant : null;
 const grupos = () => [...new Set(S.d.materiales.filter(m => m.activo && m.grupo).map(m => m.grupo))].sort((a, b) => a.localeCompare(b));
 const cppNuevo = (m, cant, cu) => m.costo_unit == null || +m.stock <= 0 ? +cu : Math.round((+m.stock * m.costo_unit + +cant * cu) / (+m.stock + +cant) * 100) / 100;
 
@@ -264,7 +267,9 @@ const Demo = (() => {
   const pk = t => PK[t] || 'id';
   const defaults = {
     hh_registros: () => ({perfil_id: S.me.id, tipo: 'directa', horas: 0, horas_extra: 0, manual: false, extra_manual: false, estado: 'pendiente', creado: new Date().toISOString(), ot_id: null, operacion_id: null, maquina_id: null, inicio: null, fin: null, motivo: null, nota: null, tarifa_id: null, fecha: null}),
-    consumos: () => ({origen: 'bodega', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, material_id: null, descripcion: null, unidad: null, doc_ref: null, kg: null, grupo: null, reparto: null}),
+    consumos: () => ({origen: 'bodega', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, material_id: null, descripcion: null, unidad: null, doc_ref: null, kg: null, grupo: null, reparto: null, ot_stock_id: null}),
+    compras: () => ({fecha: hoy(), estado: 'pedida', fecha_recepcion: null, neto: null, total: null, nota: null, leida_con_ia: false, creado_por: S.me.id, creado: new Date().toISOString()}),
+    ot_stock: () => ({traspasado: 0, costo_unit: null, kg_unidad: null, codigo: null, unidad: 'un', creado: new Date().toISOString()}),
     servicios: () => ({tipo: 'otro', estado_costo: 'pendiente', fecha: hoy(), registrado_por: S.me.id, costo_unit: null, proceso_id: null, descripcion: null, unidad: null, proveedor: null, doc_ref: null, cantidad: 1}),
     stock_ingresos: () => ({fecha: hoy(), registrado_por: S.me.id, costo_unit: null, doc_ref: null, kg: null}),
     asistencia: () => ({perfil_id: S.me.id, entrada: null, salida: null}),
@@ -299,6 +304,14 @@ const Demo = (() => {
         const esp = dow(r.fecha) === 0 || T.dias_especiales.some(d => d.fecha === r.fecha);
         r.horas_extra = esp ? r.horas : Math.max(0, Math.min(r.horas, prev + r.horas - jor));
       }
+    }
+    if (t === 'consumos' && r.ot_stock_id) {
+      const l = T.ot_stock.find(x => x.id === r.ot_stock_id); if (!l) throw new Error('La línea de stock no existe');
+      Object.assign(r, {ot_id: l.ot_id, origen: 'stock_ot', material_id: null, grupo: null}); if (r.descripcion == null) r.descripcion = l.descripcion; if (r.unidad == null) r.unidad = l.unidad;
+      if (!old || +r.cantidad !== +old.cantidad) { const sal = r2(+l.cantidad - +l.traspasado - sum(T.consumos.filter(c => c.ot_stock_id === l.id && c.id !== r.id), c => c.cantidad));
+        if (+r.cantidad > sal + 1e-4) throw new Error(`Saldo insuficiente: quedan ${num(sal, 2)} ${l.unidad} de ${l.descripcion}`); }
+      if (r.costo_unit == null && l.costo_unit != null) { r.costo_unit = +l.costo_unit; r.estado_costo = 'real'; }
+      if (r.kg == null) r.kg = l.kg_unidad != null ? r2(r.cantidad * l.kg_unidad) : String(l.unidad).toLowerCase() === 'kg' ? +r.cantidad : null;
     }
     if (t === 'consumos' && !r.material_id && r.grupo && !r.reparto) {
       const g = grupoInfo(r.grupo, T.materiales); if (!g.items.length) throw new Error(`El grupo ${r.grupo} no tiene materiales activos`);
@@ -338,6 +351,10 @@ const Demo = (() => {
     }
     if (t === 'hh_registros' && op === 'DELETE') T.hh_costo = T.hh_costo.filter(x => x.registro_id !== r.id);
     if (t === 'produccion') totProd(r.ot_id);
+    if (t === 'ot_stock' && op === 'UPDATE') T.consumos.filter(c => c.ot_stock_id === r.id).forEach(c => {
+      c.costo_unit = r.costo_unit; c.estado_costo = r.costo_unit == null ? 'pendiente' : 'real'; c.total = (+c.cantidad || 0) * (+c.costo_unit || 0);
+      c.kg = r.kg_unidad != null ? r2(c.cantidad * r.kg_unidad) : String(r.unidad).toLowerCase() === 'kg' ? +c.cantidad : null; });
+    if (t === 'compras' && op === 'DELETE') T.ot_stock = T.ot_stock.filter(l => l.compra_id !== r.id);
   }
   function totProd(otId) {
     const o = T.ots.find(x => x.id === otId); if (!o) return;
@@ -346,7 +363,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 5) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 6) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -362,11 +379,24 @@ const Demo = (() => {
       const old = T[t][i], r = {...old, ...patch}; before(t, r, old); T[t][i] = r; after(t, r, 'UPDATE'); save(); return r; },
     async upsert(t, row) { const k = pk(t); return T[t].some(x => x[k] === row[k]) ? api.upd(t, row[k], row) : api.ins(t, row); },
     async del(t, id) { const k = pk(t); const r = T[t].find(x => x[k] === id); T[t] = T[t].filter(x => x[k] !== id); if (r) after(t, r, 'DELETE'); save(); },
-    async hhQuery() { return null; } // en demo todo está cargado
+    async hhQuery() { return null; }, // en demo todo está cargado
+    async insMany(t, rows) { const out = []; for (const r of rows) out.push(await api.ins(t, r)); return out; },
+    async rpc(name, a) {
+      if (name !== 'traspasar_a_bodega') throw new Error('Función no disponible en demo');
+      const l = T.ot_stock.find(x => x.id === a.p_linea), sal = r2(+l.cantidad - +l.traspasado - sum(T.consumos.filter(c => c.ot_stock_id === l.id), c => c.cantidad));
+      if (a.p_cantidad <= 0 || a.p_cantidad > sal + 1e-4) throw new Error('Cantidad mayor al saldo');
+      l.traspasado = r2(+l.traspasado + a.p_cantidad);
+      await api.ins('stock_ingresos', {material_id: a.p_material, cantidad: a.p_cantidad, costo_unit: l.costo_unit, kg: l.kg_unidad != null ? r2(a.p_cantidad * l.kg_unidad) : null, doc_ref: 'Traspaso desde ' + T.ots.find(o => o.id === l.ot_id)?.numero});
+    },
+    async leerOC() { await new Promise(r => setTimeout(r, 900)); return {tipo: 'orden_compra', numero: 'OC-4512', proveedor: 'Aceros ejemplo S.A.', fecha: hoy(), neto: 2156000, total: 2565640,
+      items: [{codigo: 'HEB200', descripcion: 'Viga HEB 200 A572 Gr50, tira 12 m', cantidad: 4, unidad: 'tira', precio_unitario_neto: 389000, kg_total: 2932.8},
+              {codigo: 'PL12', descripcion: 'Plancha A36 12 mm 1500x6000', cantidad: 2, unidad: 'plancha', precio_unitario_neto: 0, kg_total: 1695.6},
+              {codigo: null, descripcion: 'Perno hexagonal 3/4" x 3" G8 c/tuerca y golilla', cantidad: 120, unidad: 'un', precio_unitario_neto: 1150, kg_total: null}],
+      advertencias: ['Demo: datos de ejemplo, no se leyó ningún archivo. La línea de plancha no trae precio legible.']}; },
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 5, _seq: {}, produccion: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 6, _seq: {}, produccion: [], compras: [], ot_stock: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -462,7 +492,7 @@ const Demo = (() => {
     const cons = [[A, 'CA-4-40', 216], [A, 'FL-4-150', 72], [A, 'EL-7018', 22], [A, 'GS-AR', 6], ['g', A, 'Discos de corte', 30], [B, 'DD-7', 8], [B, 'PL-10', 620], [B, 'PL-6', 380], [B, 'AL-ER70', 26], [C, 'BR-4140', 165], [D, 'PL-6', 240], [D, 'EL-7018', 8]];
     cons.forEach((x, i) => { const [ot, c, q] = x[0] === 'g' ? x.slice(1) : x; const r = {...defaults.consumos(), id: nid('consumos'), ot_id: ot.id, cantidad: q, fecha: wd[Math.min(i % 5, 4)], registrado_por: 'p-bod', ...(x[0] === 'g' ? {grupo: c} : {material_id: M(c)})};
       before('consumos', r, null); T.consumos.push(r); after('consumos', r, 'INSERT'); });
-    [[B, 'Planchas antidesgaste Hardox 450 (compra directa)', 'kg', 210, 4850, 'OC 4471'], [A, 'Pernos y empaquetaduras', 'gl', 1, null, '']].forEach(([ot, d, u, q, cu, doc]) => {
+    [[A, 'Pernos y empaquetaduras', 'gl', 1, null, '']].forEach(([ot, d, u, q, cu, doc]) => {
       const r = {...defaults.consumos(), id: nid('consumos'), ot_id: ot.id, descripcion: d, unidad: u, cantidad: q, costo_unit: cu, origen: 'compra_directa', doc_ref: doc, fecha: wd[3], registrado_por: 'p-bod'}; before('consumos', r, null); T.consumos.push(r); });
     const pr = n => T.procesos.find(x => x.nombre === n).id;
     [[A, pr('Arenado SA 2½'), 95], [A, pr('Pintura epóxica 2 manos'), 95], [C, pr('Alivio de tensiones'), 165], [D, pr('Pintura epóxica 2 manos'), 38]].forEach(([ot, p, q], i) => {
@@ -472,6 +502,12 @@ const Demo = (() => {
     // ingresos a bodega de la semana
     [[0, 'CA-4-40', 72, 18400, 'Fact. 30551'], [2, 'DI-7', 25, 1790, 'Fact. 30584'], [1, 'PL-10', 1200, 1350, 'Fact. 30577'], [2, 'FL-4-150', 24, 21900, 'Fact. 30580'], [3, 'BR-4140', 180, 3900, 'Fact. 30602'], [4, 'PL-6', 600, 1380, 'Fact. 30619'], [5, 'EL-7018', 40, 4300, 'Fact. 30633']]
       .forEach(([di, c, q, cu, doc]) => { const r = {...defaults.stock_ingresos(), id: nid('stock_ingresos'), material_id: M(c), cantidad: q, costo_unit: cu, doc_ref: doc, fecha: wd[di], registrado_por: 'p-bod'}; before('stock_ingresos', r, null); T.stock_ingresos.push(r); after('stock_ingresos', r, 'INSERT'); });
+    // compra con OC para la OT-2614 (stock del proyecto) y salidas diarias
+    { const co = {...defaults.compras(), id: nid('compras'), ot_id: B.id, numero: 'OC-4471', proveedor: 'Aceros ejemplo S.A.', fecha: wd[1], estado: 'recibida', fecha_recepcion: wd[2], neto: 2263500, total: 2693565, creado_por: 'p-bod'}; T.compras.push(co);
+      const ls = [['Plancha antidesgaste Hardox 450 10 mm', 'kg', 620, 4850, 1], ['Perfil UPN 160', 'tira', 6, 96500, 113.4], ['Plancha A36 8 mm', 'kg', 450, 1390, 1], ['Perno hexagonal 5/8" x 2" G8', 'un', 80, 690, 0.2]]
+        .map(([d, u, q, cu, kgu]) => { const l = {...defaults.ot_stock(), id: nid('ot_stock'), compra_id: co.id, ot_id: B.id, descripcion: d, unidad: u, cantidad: q, costo_unit: cu, kg_unidad: kgu}; T.ot_stock.push(l); return l; });
+      [[0, 210, 2], [1, 3, 3], [0, 180, 4], [2, 200, 4], [3, 40, 5], [1, 1, 5]].forEach(([i, q, di]) => {
+        const r = {...defaults.consumos(), id: nid('consumos'), ot_stock_id: ls[i].id, cantidad: q, fecha: wd[di], registrado_por: 'p-bod'}; before('consumos', r, null); T.consumos.push(r); }); }
     // producción terminada por día
     [[A, 1, 535, 5], [A, 2, 642, 6], [A, 3, 428, 4], [A, 4, 749, 7], [A, 5, 535, 5], [A, 6, 321, 3],
      [C, 3, 25, 2], [C, 5, 37.5, 3], [D, 0, 360, 30], [D, 1, 360, 30]].forEach(([ot, di, k, pz]) => {
@@ -494,8 +530,9 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion'];
-      const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return t === 'produccion' ? q.catch(() => []) : q; })); // produccion: tolera que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock'];
+      const opc = ['produccion', 'compras', 'ot_stock']; // toleran que falte la migración
+      const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
       const [h1, h2, as, si] = await Promise.all([
@@ -510,6 +547,16 @@ const Cloud = (() => {
     async upd(t, id, patch) { const {data, error} = await sb.from(t).update(patch).eq(PK[t] || 'id', id).select(); if (error) throw error; if (!data?.length) throw new Error('No tienes permiso para modificar este registro'); return data[0]; },
     async upsert(t, row) { const {data, error} = await sb.from(t).upsert(row).select().single(); if (error) throw error; return data; },
     async del(t, id) { const {error} = await sb.from(t).delete().eq(PK[t] || 'id', id); if (error) throw error; },
+    async insMany(t, rows) { const {data, error} = await sb.from(t).insert(rows).select(); if (error) throw error; return data; },
+    async rpc(name, args) { const {error} = await sb.rpc(name, args); if (error) throw error; },
+    async leerOC(archivo, tipo) {
+      const {data, error} = await sb.functions.invoke('leer-oc', {body: {archivo, tipo}});
+      if (error) { let code = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; } catch (e) {}
+        throw new Error(({tope: 'Se alcanzó el tope diario de lecturas con IA. Ingresa las líneas a mano o prueba mañana.', sin_permiso: 'Tu usuario no tiene permiso para leer documentos con IA.',
+          sin_clave: 'Falta la clave de IA en Supabase (secreto ANTHROPIC_API_KEY).', muy_pesado: 'El archivo es muy pesado (máximo 15 MB).', anthropic: 'El servicio de IA no respondió. Inténtalo de nuevo.'})[code]
+          || (st === 404 ? 'La función leer-oc no está instalada en Supabase.' : 'No se pudo leer el documento con IA.')); }
+      return data.compra;
+    },
     async hhQuery({desde, hasta, ot}) { let q = () => { let x = sb.from('v_hh').select('*'); if (desde) x = x.gte('fecha', desde); if (hasta) x = x.lte('fecha', hasta); if (ot) x = x.eq('ot_id', ot); return x.order('id'); }; return all(q); }
   };
 })();
@@ -870,12 +917,16 @@ function vOTDetalle() {
       </tbody></table></div>
       <div class="small muted">Horas extra: ${hrs(c.horasExtra)} = ${clp(c.extra)}. Retrabajo: ${hrs(c.horasRet)} = ${clp(c.ret)}.${c.p ? '' : ' Sin cotización cargada: edita la OT para ingresarla.'}</div></div></div>` : ''}
   ${vProduccionOT(o, c, adm)}
+  ${(() => { const r = resumenStockOT(o.id); if (!r.ls.length) return '';
+    return `<div class="card"><div class="row between"><h3>Stock del proyecto</h3><button class="btn" data-act="go-stockot" data-id="${o.id}">Ver stock y salidas</button></div>
+      <div class="row" style="gap:28px">${adm ? `<div><div class="label">Comprado con OC</div><div class="pill-n">${clp(r.comprado)}</div></div><div><div class="label">Cargado a la OT</div><div class="pill-n">${clp(r.entregado)}</div></div><div><div class="label">Saldo sin usar</div><div class="pill-n">${clp(r.saldo)}</div></div>` : ''}
+        <div><div class="label">Saldo en kg</div><div class="pill-n">${kg(r.kgSaldo)}</div></div><div><div class="label">Líneas con saldo</div><div class="pill-n">${r.conSaldo} de ${r.ls.length}</div></div></div></div>`; })()}
   <div class="grid2">
     <div class="card"><div class="row between"><h3>Horas hombre</h3><span class="muted small">${hrs(c.horas)}${+o.ppto_horas ? ` de ${hrs(o.ppto_horas)} cotizadas` : ''}</span></div>
       ${Object.entries(porOp).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><div class="row between small"><span>${esc(k)}</span><span>${hrs(v)}</span></div><div class="bar"><i style="width:${v / maxOp * 100}%"></i></div></div>`).join('') || '<div class="empty">Sin horas registradas.</div>'}
       <details><summary class="small">Por persona</summary><div class="kv small" style="margin-top:8px">${Object.entries(porPer).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><span class="v">${hrs(v)}</span>`).join('')}</div></details></div>
     <div class="card"><div class="row between"><h3>Materiales</h3><span class="muted small">${c.kgMat ? kg(c.kgMat) : ''}${adm ? `${c.kgMat ? ' · ' : ''}${clp(c.mat)}` : ''}</span></div>
-      ${c.cons.length ? `<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="n">Cant.</th><th class="n">Kg</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.cons.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}${x.origen === 'compra_directa' ? ' <span class="chip">compra directa</span>' : ''}</td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td>
+      ${c.cons.length ? `<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="n">Cant.</th><th class="n">Kg</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.cons.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}${x.origen === 'compra_directa' ? ' <span class="chip">compra directa</span>' : x.origen === 'stock_ot' ? ' <span class="chip acc">stock OT</span>' : ''}</td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td>
         ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td><button class="btn ghost" data-act="costo-edit" data-t="consumos" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin consumos.</div>'}</div>
     <div class="card"><div class="row between"><h3>Pintura, tratamiento térmico y servicios</h3>${adm ? `<span class="muted small">${clp(c.serv)}</span>` : ''}</div>
       ${c.servL.length ? `<div class="tbl-wrap"><table><thead><tr><th>Servicio</th><th class="n">Cant.</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.servL.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}<div class="tiny muted">${TIPOS_SERV[x.tipo]} · ${x.proveedor ? esc(x.proveedor) : 'propio'}</div></td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td>
@@ -969,14 +1020,15 @@ function sheetServicio(otId) {
 /* ---------------- BODEGA */
 function vBodega() {
   const t = S.ui.bodTab, bajo = S.d.materiales.filter(m => m.activo && +m.stock <= +m.stock_min);
-  const tabsH = `<div class="seg" style="max-width:480px">${[['consumo', 'Salida a OT'], ['ingreso', 'Ingreso'], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
+  const tabsH = `<div class="seg" style="max-width:640px">${[['consumo', 'Salida a OT'], ['stockot', 'Stock por OT'], ['ingreso', 'Ingreso'], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
   const mats = S.d.materiales.filter(m => m.activo);
   const opt = m => `<option value="${m.id}">${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} — ${num(m.stock, 2)} ${esc(m.unidad)}</option>`;
   const matOptions = conGrupo => grupos().map(g => { const gi = grupoInfo(g);
       return `<optgroup label="${esc(g)}">${conGrupo ? `<option value="g:${esc(g)}">${esc(g)} · cualquier tamaño — ${num(gi.stock, 2)} ${esc(gi.unidad)}${gi.cpp != null && (isAdmin() || role() === 'bodega') ? ` · promedio ${clp(gi.cpp)}` : ''}</option>` : ''}${mats.filter(m => m.grupo === g).map(opt).join('')}</optgroup>`; }).join('')
     + (mats.some(m => !m.grupo) ? `<optgroup label="Sin grupo">${mats.filter(m => !m.grupo).map(opt).join('')}</optgroup>` : '');
   let body = '';
-  if (t === 'consumo') {
+  if (t === 'stockot') body = vStockOT();
+  else if (t === 'consumo') {
     const rec = [...S.d.consumos].sort((a, b) => b.id - a.id).slice(0, 25);
     body = `<div class="grid2"><form class="card" data-form="consumo"><h2>Salida de material a una OT</h2>
       <label class="f"><span>OT</span><select name="ot" id="cs-ot" required><option value="">Elegir…</option>${S.d.ots.filter(o => o.estado !== 'entregada').map(o => `<option value="${o.id}">${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
@@ -991,7 +1043,7 @@ function vBodega() {
         <label class="f"><span>Kg <span id="cs-kgh" class="tiny"></span></span><input type="number" name="kg" id="cs-kg" min="0" step="any" inputmode="decimal" placeholder="Se calcula solo"></label>
         <label class="f"><span>Guía / OC / factura</span><input type="text" name="doc" id="cs-doc"></label></div>
       <button class="btn pri xl">Registrar salida</button></form>
-      <div class="card"><h2>Últimos movimientos</h2><div class="list">${rec.map(x => `<div class="item"><div class="t"><span class="ot">${esc(otOf(x.ot_id)?.numero)}</span> ${esc(x.descripcion)}<div class="small muted">${fechaTxt(x.fecha)} · ${x.origen === 'bodega' ? 'bodega' : 'compra directa'}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div>
+      <div class="card"><h2>Últimos movimientos</h2><div class="list">${rec.map(x => `<div class="item"><div class="t"><span class="ot">${esc(otOf(x.ot_id)?.numero)}</span> ${esc(x.descripcion)}<div class="small muted">${fechaTxt(x.fecha)} · ${({bodega: 'bodega', compra_directa: 'compra directa', stock_ot: 'stock de la OT'})[x.origen]}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div>
         <div style="text-align:right"><strong>${num(x.cantidad, 2)} ${esc(x.unidad || '')}</strong>${x.kg != null && String(x.unidad).toLowerCase() !== 'kg' ? `<div class="tiny muted">${kg(x.kg)}</div>` : ''}${x.estado_costo === 'pendiente' ? '<div><span class="chip warn">sin costo</span></div>' : ''}</div></div>`).join('') || '<div class="empty">Sin movimientos.</div>'}</div></div></div>`;
   } else if (t === 'ingreso') {
     const rec = [...S.d.stock_ingresos].sort((a, b) => b.id - a.id).slice(0, 25);
@@ -1023,6 +1075,123 @@ function vBodega() {
   }
   const stockKg = sum(S.d.materiales.filter(m => m.activo), m => kgMov(m, Math.max(0, +m.stock)));
   return `<div class="row between"><h1>Bodega</h1><span class="chip">${kg(stockKg)} de acero y consumibles en bodega</span></div>${tabsH}${body}`;
+}
+
+/* ---------------- STOCK POR OT (compras con OC) */
+function resumenStockOT(otId) {
+  const ls = S.d.ot_stock.filter(l => l.ot_id === otId);
+  const val = (l, q) => l.costo_unit != null ? q * l.costo_unit : 0;
+  return {ls, comprado: sum(ls, l => val(l, l.cantidad)), entregado: sum(ls, l => val(l, sum(salidasLinea(l), c => c.cantidad))), saldo: sum(ls, l => val(l, saldoLinea(l))),
+    kgSaldo: sum(ls, l => kgLinea(l, saldoLinea(l))), conSaldo: ls.filter(l => saldoLinea(l) > 0).length, sinPrecio: ls.filter(l => l.costo_unit == null).length};
+}
+function vStockOT() {
+  const verP = isAdmin() || role() === 'bodega';
+  const otsCon = S.d.ots.filter(o => S.d.ot_stock.some(l => l.ot_id === o.id));
+  if (!otsCon.some(o => o.id === S.ui.stockOt)) S.ui.stockOt = otsCon[0]?.id ?? null;
+  const o = otOf(S.ui.stockOt);
+  const head = `<div class="row between"><p class="small muted" style="margin:0;max-width:62ch">Material comprado con OC para una OT. Queda como stock del proyecto y se carga a la OT a medida que sale cada día.</p>
+    <button class="btn pri" data-act="compra-new">+ Nueva compra para OT</button></div>`;
+  if (!o) return `${head}<div class="empty">Aún no hay compras asignadas a OT. Sube la orden de compra y la IA llena las líneas.</div>`;
+  const r = resumenStockOT(o.id), compras = S.d.compras.filter(c => c.ot_id === o.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const est = l => S.d.compras.find(c => c.id === l.compra_id)?.estado;
+  return `${head}
+  <div class="row">${otsCon.map(x => `<button class="btn ${x.id === o.id ? 'pri' : ''}" data-act="stockot-ot" data-id="${x.id}">${esc(x.numero)}</button>`).join('')}</div>
+  <div class="card">
+    <div class="row between"><div><span class="ot">${esc(o.numero)}</span> <strong>${esc(o.descripcion || '')}</strong><div class="small muted">${esc(o.cliente)}</div></div>
+      <div class="row"><button class="btn pri" data-act="salida-dia" data-ot="${o.id}" ${r.conSaldo ? '' : 'disabled'}>Salida del día</button></div></div>
+    <div class="row" style="gap:28px">
+      ${verP ? `<div><div class="label">Comprado</div><div class="pill-n">${clp(r.comprado)}</div></div><div><div class="label">Cargado a la OT</div><div class="pill-n">${clp(r.entregado)}</div></div><div><div class="label">Saldo en stock</div><div class="pill-n">${clp(r.saldo)}</div></div>` : ''}
+      <div><div class="label">Saldo en kg</div><div class="pill-n">${kg(r.kgSaldo)}</div></div>
+      ${r.sinPrecio ? `<span class="chip warn">${r.sinPrecio} líneas sin precio</span>` : ''}</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="n">Comprado</th><th class="n">Salidas</th><th class="n">Saldo</th><th class="n">Saldo kg</th>${verP ? '<th class="n">Precio neto</th>' : ''}<th></th></tr></thead><tbody>
+    ${r.ls.map(l => { const sd = saldoLinea(l), sal = sum(salidasLinea(l), c => c.cantidad);
+      return `<tr><td style="white-space:normal"><button class="btn ghost" style="padding:0;min-height:0;text-align:left;font-weight:600;color:var(--ink)" data-act="linea-edit" data-id="${l.id}">${esc(l.descripcion)}</button>
+        <div class="tiny muted">${esc(S.d.compras.find(c => c.id === l.compra_id)?.numero || '')}${est(l) === 'pedida' ? ' · <span class="chip warn">pedida, sin recibir</span>' : ''}${+l.traspasado ? ` · ${num(l.traspasado, 2)} ${esc(l.unidad)} traspasado a bodega` : ''}</div></td>
+        <td class="n">${num(l.cantidad, 2)} ${esc(l.unidad)}</td><td class="n">${num(sal, 2)}</td><td class="n"><strong>${num(sd, 2)}</strong></td><td class="n">${kgLinea(l, sd) != null ? num(kgLinea(l, sd), 0) : '—'}</td>
+        ${verP ? `<td class="n">${l.costo_unit == null ? '<span class="chip warn">sin precio</span>' : clp(l.costo_unit)}</td>` : ''}
+        <td>${sd > 0 ? `<button class="btn ghost" data-act="traspaso" data-id="${l.id}">Traspasar</button>` : '<span class="chip ok">Usado</span>'}</td></tr>`; }).join('')}
+    </tbody></table></div>
+    <details><summary class="small">Compras de esta OT (${compras.length})</summary><div class="list" style="margin-top:6px">${compras.map(c => `<div class="item"><div class="t">${esc(c.numero || 'Sin número')} · ${esc(c.proveedor || '')}
+        <div class="small muted">${fechaTxt(c.fecha)}${verP && c.total ? ` · total ${clp(c.total)}` : ''}${c.leida_con_ia ? ' · leída con IA' : ''}</div></div>
+      <div class="row" style="gap:6px">${c.estado === 'pedida' ? `<span class="chip warn">Pedida</span><button class="btn" data-act="compra-recibir" data-id="${c.id}">Marcar recibida</button>` : `<span class="chip ok">Recibida ${c.fecha_recepcion ? fechaTxt(c.fecha_recepcion) : ''}</span>`}
+        ${isAdmin() && !S.d.ot_stock.some(l => l.compra_id === c.id && salidasLinea(l).length) ? `<button class="btn ghost danger" data-act="compra-del" data-id="${c.id}">Eliminar</button>` : ''}</div></div>`).join('')}</div></details>
+  </div>`;
+}
+const lineaHtml = (l = {}) => `<div class="ln card" style="padding:10px;gap:8px;box-shadow:none">
+  <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="text" class="ln-d" placeholder="Descripción" value="${esc(l.descripcion || '')}" style="flex:1;min-width:0" aria-label="Descripción">
+    <button type="button" class="x" data-act="ln-del" aria-label="Quitar línea">✕</button></div>
+  <div class="fgrid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,110px),1fr))">
+    <label class="f"><span>Cantidad</span><input type="number" class="ln-q" step="any" min="0" value="${l.cantidad ?? ''}" inputmode="decimal"></label>
+    <label class="f"><span>Unidad</span><input type="text" class="ln-u" value="${esc(l.unidad || 'un')}" list="unidades"></label>
+    <label class="f"><span>Precio neto $</span><input type="number" class="ln-p" step="any" min="0" value="${l.precio_unitario_neto || ''}" inputmode="decimal" placeholder="pendiente"></label>
+    <label class="f"><span>Kg total</span><input type="number" class="ln-k" step="any" min="0" value="${l.kg_total ?? ''}" inputmode="decimal" placeholder="opcional"></label></div></div>`;
+function sheetCompra() {
+  const ots = S.d.ots.filter(o => o.estado !== 'entregada');
+  openModal('Nueva compra para OT', `<form data-form="compra">
+    <label class="f"><span>OT</span><select name="ot" id="co-ot" required><option value="">Elegir…</option>${ots.map(o => `<option value="${o.id}" ${o.id === S.ui.stockOt ? 'selected' : ''}>${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
+    <div class="card" style="box-shadow:none;background:var(--accent-soft);border-color:transparent">
+      <strong>Leer la orden de compra con IA</strong>
+      <span class="small">Sube el PDF o una foto de la OC, factura o guía. La IA llena el proveedor y las líneas; revísalas antes de guardar.</span>
+      <div class="row"><input type="file" id="co-file" accept="application/pdf,image/*" style="flex:1;min-width:0"><button type="button" class="btn pri" data-act="compra-ia">Leer con IA</button></div>
+      <div id="co-ia-msg" class="small" role="status"></div></div>
+    <div class="fgrid"><label class="f"><span>N° OC / factura / guía</span><input type="text" name="numero" id="co-num"></label>
+      <label class="f"><span>Proveedor</span><input type="text" name="proveedor" id="co-prov"></label>
+      <label class="f"><span>Fecha</span><input type="date" name="fecha" id="co-f" value="${hoy()}"></label>
+      <label class="f"><span>Total con IVA $</span><input type="number" name="total" id="co-tot" step="any" min="0"></label></div>
+    <input type="hidden" name="neto" id="co-neto"><input type="hidden" name="ia" id="co-ia" value="">
+    <div class="seg" role="group" aria-label="Estado"><button type="button" data-act="co-est" data-k="pedida" aria-pressed="true">Pedida (aún no llega)</button><button type="button" data-act="co-est" data-k="recibida" aria-pressed="false">Ya recibida</button></div>
+    <input type="hidden" name="estado" id="co-estado" value="pedida">
+    <div class="label">Líneas</div>
+    <div id="co-lineas" style="display:grid;gap:8px">${lineaHtml()}</div>
+    <datalist id="unidades">${['un', 'kg', 'm', 'm2', 'tira', 'plancha', 'barra', 'tubo', 'lt', 'gl', 'juego', 'caja', 'rollo'].map(u => `<option value="${u}">`).join('')}</datalist>
+    <button type="button" class="btn ghost" data-act="ln-add">+ Agregar línea</button>
+    <p class="small muted">Precio neto por unidad, sin IVA. Si no lo sabes, déjalo vacío y se completa cuando llegue la factura. Kg total: el peso de la línea si la OC lo trae; si la unidad es kg no hace falta.</p>
+    <button class="btn pri xl">Guardar compra</button></form>`);
+}
+async function archivoB64(f) {
+  if (f.type.startsWith('image/')) {
+    try {
+      const bmp = await createImageBitmap(f), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+      cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+      return {b64: cv.toDataURL('image/jpeg', 0.85).split(',')[1], tipo: 'image/jpeg'};
+    } catch (e) { /* si falla, se envía tal cual */ }
+  }
+  const d = await new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = mal; r.readAsDataURL(f); });
+  return {b64: String(d).split(',')[1], tipo: f.type || 'application/pdf'};
+}
+function sheetSalidaDia(otId) {
+  const o = otOf(otId), ls = S.d.ot_stock.filter(l => l.ot_id === otId && saldoLinea(l) > 0);
+  openModal(`Salida del día · ${o.numero}`, `<form data-form="salida-dia"><input type="hidden" name="ot" value="${otId}">
+    <div class="fgrid"><label class="f"><span>Fecha</span><input type="date" name="fecha" id="sd-f" value="${hoy()}" max="${hoy()}" required></label>
+      <label class="f"><span>Vale / nota (opcional)</span><input type="text" name="doc" id="sd-doc" placeholder="Ej.: vale 231, armado chute"></label></div>
+    <p class="small muted">Escribe solo lo que sale hoy. Lo que no uses queda como saldo de la OT.</p>
+    <div class="list">${ls.map(l => `<div class="item" style="grid-template-columns:1fr minmax(96px,130px)"><div class="t">${esc(l.descripcion)}<div class="small muted">Saldo ${num(saldoLinea(l), 2)} ${esc(l.unidad)}${kgLinea(l, saldoLinea(l)) != null ? ` · ${kg(kgLinea(l, saldoLinea(l)))}` : ''}</div></div>
+      <label class="f"><span class="tiny">${esc(l.unidad)}</span><input type="number" name="q-${l.id}" id="sd-q-${l.id}" step="any" min="0" max="${saldoLinea(l)}" inputmode="decimal"></label></div>`).join('')}</div>
+    <button class="btn pri xl">Registrar salida</button></form>`);
+}
+function sheetTraspaso(id) {
+  const l = byId(S.d.ot_stock, id), sd = saldoLinea(l), o = otOf(l.ot_id);
+  const mats = S.d.materiales.filter(m => m.activo).sort((a, b) => (a.grupo || '').localeCompare(b.grupo || '') || a.nombre.localeCompare(b.nombre));
+  openModal('Saldo de la línea', `<form data-form="traspaso"><input type="hidden" name="id" value="${id}">
+    <div><strong>${esc(l.descripcion)}</strong><div class="small muted">${esc(o.numero)} · saldo ${num(sd, 2)} ${esc(l.unidad)}</div></div>
+    <div class="seg" role="group"><button type="button" data-act="tr-modo" data-k="bodega" aria-pressed="true">Traspasar a bodega general</button><button type="button" data-act="tr-modo" data-k="ot" aria-pressed="false">Cargar todo a la OT</button></div>
+    <input type="hidden" name="modo" id="tr-modo" value="bodega">
+    <div id="tr-bod" style="display:grid;gap:12px">
+      <label class="f"><span>Material de bodega donde entra</span><select name="mat" id="tr-mat"><option value="">Elegir…</option>${mats.map(m => `<option value="${m.id}" ${m.unidad === l.unidad ? '' : 'disabled'}>${m.grupo ? esc(m.grupo) + ' › ' : ''}${esc(m.nombre)} (${esc(m.unidad)})</option>`).join('')}</select>
+        <span class="tiny muted">Solo materiales con la misma unidad (${esc(l.unidad)}). Si no existe, créalo primero en Ajustes › Materiales.</span></label>
+      <label class="f"><span>Cantidad</span><input type="number" name="cant" id="tr-c" step="any" min="0" max="${sd}" value="${sd}"></label></div>
+    <p class="small muted" id="tr-ot-txt" hidden>Se registra una salida por todo el saldo (${num(sd, 2)} ${esc(l.unidad)}) y su costo queda en la OT. Útil al cerrar la OT si el sobrante no se reutiliza.</p>
+    <button class="btn pri">Confirmar</button></form>`);
+}
+function sheetLinea(id) {
+  const l = byId(S.d.ot_stock, id), verP = isAdmin() || role() === 'bodega';
+  openModal('Editar línea', `<form data-form="linea"><input type="hidden" name="id" value="${id}">
+    <label class="f"><span>Descripción</span><input type="text" name="desc" id="li-d" value="${esc(l.descripcion)}" required></label>
+    <div class="fgrid">${verP ? `<label class="f"><span>Precio neto por ${esc(l.unidad)} $</span><input type="number" name="cu" id="li-cu" step="any" min="0" value="${l.costo_unit ?? ''}"></label>` : ''}
+      <label class="f"><span>Kg por ${esc(l.unidad)}</span><input type="number" name="kgu" id="li-k" step="any" min="0" value="${l.kg_unidad ?? ''}"></label></div>
+    <p class="small muted">Si cambias el precio (por ejemplo, cuando llega la factura), se actualiza también el costo de las salidas ya hechas a la OT.</p>
+    <button class="btn pri">Guardar</button></form>`);
 }
 
 /* ---------------- RESUMEN (admin) */
@@ -1077,6 +1246,7 @@ function vResumen() {
       <div><div class="small muted">Compra directa a OT</div><div class="pill-n">${kg(kgCompMes)}</div></div>
       <div><div class="small muted">Entregado a OT</div><div class="pill-n">${kg(kgEntMes)}</div></div>
       <div><div class="small muted">Material en OT en proceso</div><div class="pill-n">${kg(kgMatAct)}</div></div>
+      ${S.d.ot_stock.length ? `<div><div class="small muted">Stock de proyectos sin usar</div><div class="pill-n">${kg(sum(S.d.ot_stock, l => kgLinea(l, saldoLinea(l))))}</div><div class="tiny muted">${clp(sum(S.d.ot_stock, l => l.costo_unit != null ? saldoLinea(l) * l.costo_unit : 0))}</div></div>` : ''}
     </div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:110px" role="img" aria-label="Kg producidos por día, últimos 7 días">
       ${kgDia.map(([f, v]) => `<div style="display:grid;gap:4px;align-content:end;height:100%;text-align:center"><span class="tiny" style="font-weight:600">${v ? num(v, 0) : ''}</span><i style="display:block;height:${Math.max(v ? 3 : 1, v / maxDia * 70)}px;background:${v ? 'var(--ok)' : 'var(--line)'};border-radius:3px 3px 0 0"></i><span class="tiny muted">${fechaTxt(f).split(',')[0]}</span></div>`).join('')}
@@ -1269,6 +1439,35 @@ const ACT = {
       ...c.servL.map(x => [TIPOS_SERV[x.tipo], x.fecha, x.descripcion, x.proveedor || 'propio', +x.cantidad, x.unidad, '', +x.total, x.estado_costo]),
       ['Gastos generales', '', `${cfg('gg_pct')}% del costo directo`, '', '', '', '', c.gg, '']]); },
   'serv-new': el => sheetServicio(+el.dataset.ot || null),
+  'compra-new': () => sheetCompra(),
+  'stockot-ot': el => { S.ui.stockOt = +el.dataset.id; render(); },
+  'go-stockot': el => { S.ui.stockOt = +el.dataset.id; S.ui.bodTab = 'stockot'; S.tab = 'bodega'; render(); window.scrollTo(0, 0); },
+  'ln-add': () => { document.getElementById('co-lineas').insertAdjacentHTML('beforeend', lineaHtml()); },
+  'ln-del': el => { const box = document.getElementById('co-lineas'); if (box.children.length > 1) el.closest('.ln').remove(); else el.closest('.ln').querySelectorAll('input').forEach(i => i.value = i.classList.contains('ln-u') ? 'un' : ''); },
+  'co-est': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); document.getElementById('co-estado').value = el.dataset.k; },
+  'compra-ia': async el => {
+    const f = document.getElementById('co-file').files[0], msg = document.getElementById('co-ia-msg');
+    if (!f && !DEMO) return toast('Primero elige el archivo de la OC');
+    if (f && f.size > 15 * 1024 * 1024) return toast('El archivo es muy pesado (máximo 15 MB)');
+    el.disabled = true; msg.textContent = 'Leyendo el documento… puede tardar unos 20 segundos.';
+    try {
+      const a = f ? await archivoB64(f) : {};
+      const r = await DB.leerOC(a.b64, a.tipo);
+      const set = (id, v) => { if (v != null && v !== '') document.getElementById(id).value = v; };
+      set('co-num', r.numero); set('co-prov', r.proveedor); set('co-f', r.fecha); set('co-tot', r.total); set('co-neto', r.neto);
+      document.getElementById('co-ia').value = '1';
+      document.getElementById('co-lineas').innerHTML = (r.items || []).map(it => lineaHtml({...it, precio_unitario_neto: it.precio_unitario_neto || ''})).join('') || lineaHtml();
+      msg.innerHTML = `<strong>${(r.items || []).length} líneas leídas.</strong> Revisa cantidades y precios antes de guardar.${(r.advertencias || []).length ? '<br>' + r.advertencias.map(esc).join('<br>') : ''}`;
+    } catch (e) { msg.textContent = errTxt(e); } finally { el.disabled = false; }
+  },
+  'compra-recibir': el => run(() => DB.upd('compras', +el.dataset.id, {estado: 'recibida', fecha_recepcion: hoy()}), 'Compra marcada como recibida'),
+  'compra-del': el => openModal('Eliminar compra', `<p>Se eliminan la compra y sus líneas. Solo es posible si aún no tiene salidas.</p><div class="row"><button class="btn danger" data-act="compra-del-ok" data-id="${el.dataset.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`),
+  'compra-del-ok': el => run(() => DB.del('compras', +el.dataset.id), 'Compra eliminada'),
+  'salida-dia': el => sheetSalidaDia(+el.dataset.ot),
+  'traspaso': el => sheetTraspaso(+el.dataset.id),
+  'tr-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const ot = el.dataset.k === 'ot';
+    document.getElementById('tr-modo').value = el.dataset.k; document.getElementById('tr-bod').hidden = ot; document.getElementById('tr-ot-txt').hidden = !ot; },
+  'linea-edit': el => sheetLinea(+el.dataset.id),
   'prod-new': el => sheetProduccion(+el.dataset.ot || (S.tab === 'ot' ? S.ui.otId : null)),
   'prod-del': el => { const x = byId(S.d.produccion, +el.dataset.id); openModal('Eliminar registro de producción', `<p>¿Eliminar ${kg(x.kg)} del ${fechaTxt(x.fecha)}? Se descuentan del total de la OT.</p><div class="row"><button class="btn danger" data-act="prod-del-ok" data-id="${x.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`); },
   'prod-del-ok': el => run(() => DB.del('produccion', +el.dataset.id), 'Registro eliminado'),
@@ -1389,6 +1588,41 @@ const FORMS = {
     const o = otOf(row.ot_id), c = costOT(o);
     if (c.kgCot && c.kgProd + row.kg > c.kgCot * 1.1) toast(`Ojo: la OT queda con ${kg(c.kgProd + row.kg)}, más que los ${kg(c.kgCot)} cotizados`);
     return run(() => DB.ins('produccion', row), `${kg(row.kg)} registrados en ${o.numero}`);
+  },
+  compra(fd) {
+    const ot = +fd.get('ot'); if (!ot) return toast('Elige la OT');
+    const lineas = [...document.querySelectorAll('#co-lineas .ln')].map(n => ({d: n.querySelector('.ln-d').value.trim(), q: +n.querySelector('.ln-q').value, u: n.querySelector('.ln-u').value.trim().toLowerCase() || 'un',
+      p: n.querySelector('.ln-p').value, k: n.querySelector('.ln-k').value})).filter(x => x.d || x.q);
+    if (!lineas.length) return toast('Agrega al menos una línea');
+    const mala = lineas.find(x => !x.d || !(x.q > 0)); if (mala) return toast('Cada línea necesita descripción y cantidad');
+    const n = k => fd.get(k) === '' || fd.get(k) == null ? null : +fd.get(k);
+    const est = fd.get('estado');
+    return run(async () => {
+      const c = await DB.ins('compras', {ot_id: ot, numero: fd.get('numero') || null, proveedor: fd.get('proveedor') || null, fecha: fd.get('fecha') || hoy(), estado: est,
+        fecha_recepcion: est === 'recibida' ? hoy() : null, total: n('total'), neto: n('neto'), leida_con_ia: fd.get('ia') === '1'});
+      await DB.insMany('ot_stock', lineas.map(x => ({compra_id: c.id, ot_id: ot, descripcion: x.d, cantidad: x.q, unidad: x.u, costo_unit: x.p === '' || +x.p === 0 ? null : +x.p,
+        kg_unidad: x.k !== '' && +x.k > 0 ? Math.round(+x.k / x.q * 1e4) / 1e4 : x.u === 'kg' ? 1 : null})));
+      S.ui.stockOt = ot; S.ui.bodTab = 'stockot';
+    }, `Compra guardada con ${lineas.length} líneas en el stock de ${otOf(ot).numero}`);
+  },
+  'salida-dia'(fd) {
+    const ot = +fd.get('ot'), rows = [];
+    for (const l of S.d.ot_stock.filter(x => x.ot_id === ot)) { const v = fd.get('q-' + l.id); if (v === null || v === '' || !(+v > 0)) continue;
+      if (+v > saldoLinea(l) + 1e-4) return toast(`${l.descripcion}: solo quedan ${num(saldoLinea(l), 2)} ${l.unidad}`);
+      rows.push({ot_stock_id: l.id, ot_id: ot, cantidad: +v, fecha: fd.get('fecha'), doc_ref: fd.get('doc') || null, origen: 'stock_ot'}); }
+    if (!rows.length) return toast('Escribe la cantidad de al menos una línea');
+    return run(() => DB.insMany('consumos', rows), `Salida registrada: ${rows.length} ${rows.length === 1 ? 'ítem' : 'ítems'}`);
+  },
+  traspaso(fd) {
+    const l = byId(S.d.ot_stock, +fd.get('id')), sd = saldoLinea(l);
+    if (fd.get('modo') === 'ot') return run(() => DB.ins('consumos', {ot_stock_id: l.id, ot_id: l.ot_id, cantidad: sd, fecha: hoy(), doc_ref: 'Cierre: saldo cargado a la OT', origen: 'stock_ot'}), 'Saldo cargado a la OT');
+    const mat = +fd.get('mat'), q = +fd.get('cant'); if (!mat) return toast('Elige el material de bodega'); if (!(q > 0) || q > sd + 1e-4) return toast(`La cantidad debe ser entre 0 y ${num(sd, 2)}`);
+    return run(() => DB.rpc('traspasar_a_bodega', {p_linea: l.id, p_material: mat, p_cantidad: q}), 'Saldo traspasado a bodega general');
+  },
+  linea(fd) {
+    const id = +fd.get('id'), row = {descripcion: fd.get('desc').trim(), kg_unidad: fd.get('kgu') === '' ? null : +fd.get('kgu')};
+    if (fd.has('cu')) row.costo_unit = fd.get('cu') === '' ? null : +fd.get('cu');
+    return run(() => DB.upd('ot_stock', id, row), 'Línea actualizada');
   },
   costo(fd) { const t = fd.get('t'), id = +fd.get('id'); return run(() => DB.upd(t, id, {costo_unit: +fd.get('cu'), estado_costo: fd.get('est') ? 'estimado' : 'real', doc_ref: fd.get('doc') || null}), 'Costo actualizado'); },
   param(fd) { return run(async () => { for (const k of ['gg_pct', 'jornada_horas', 'colacion_min']) await DB.upsert('config', {clave: k, valor: +fd.get(k)}); }, 'Parámetros guardados'); },
