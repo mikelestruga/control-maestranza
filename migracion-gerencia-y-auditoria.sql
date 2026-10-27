@@ -218,6 +218,7 @@ do $$ declare x record; begin
       ('servicios','cambios'),('tarifas','todo'),('maquinas','todo'),('procesos','todo'),('perfiles','cambios'),('config','todo'),
       ('operaciones','todo'),('dias_especiales','todo')) as v(t, m)
   loop
+    continue when to_regclass('public.' || x.t) is null;   -- tabla de una migración que aún no se ejecutó
     execute format('drop trigger if exists zz_auditar on %I', x.t);
     execute format('create trigger zz_auditar after insert or update or delete on %I for each row execute function auditar(%L)', x.t, x.m);
   end loop;
