@@ -239,6 +239,7 @@ const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, j
 const role = () => S.me?.rol;
 const isAdmin = () => role() === 'admin';                       // cambios de la plataforma, claves, borrados
 const verCostos = () => role() === 'admin' || role() === 'gerencia';   // ve costos y cotizaciones
+const puedeCatMat = () => ['admin', 'gerencia', 'bodega'].includes(role());   // catálogo de materiales (queda en el registro de cambios)
 const isJefe = () => ['jefe', 'gerencia', 'admin'].includes(role());
 const perfil = id => byId(S.d.perfiles, id);
 const otOf = id => byId(S.d.ots, id);
@@ -267,11 +268,64 @@ const demoArchivos = new Map();
 const limpiarNombre = n => String(n || 'archivo').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-80);
 const pesoTxt = b => !b ? '' : b > 1048576 ? num(b / 1048576, 1) + ' MB' : num(b / 1024, 0) + ' KB';
 
+/* ---------------------------------------------------------------- registro de cambios (auditoría) */
+const AUD = {
+  seccion: {ots: 'Órdenes de trabajo', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
+    materiales: 'Materiales', consumos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', documentos: 'Compras y documentos',
+    servicios: 'Pintura y servicios', tarifas: 'Costos y tarifas', maquinas: 'Costos y tarifas', procesos: 'Costos y tarifas', perfiles: 'Trabajadores'},
+  modo: {ots: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
+    compras: 'todo', documentos: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
+  nombre: {ots: 'OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
+    stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', documentos: 'documento', servicios: 'servicio', tarifas: 'tarifa HH', maquinas: 'máquina',
+    procesos: 'proceso propio', perfiles: 'trabajador', config: 'parámetro', operaciones: 'operación', dias_especiales: 'feriado'},
+  agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock'],
+  col: {costo_unit: 'Costo unitario', costo_hh: 'Costo hora', costo_hh_extra: 'Costo hora extra', precio_venta: 'Precio de venta', ppto_hh: 'Mano de obra cotizada', ppto_material: 'Materiales cotizados',
+    ppto_servicios: 'Servicios cotizados', ppto_maquina: 'Máquinas cotizadas', stock: 'Stock', stock_min: 'Stock mínimo', nombre: 'Nombre', rol: 'Rol', activo: 'Activo', activa: 'Activa',
+    estado: 'Estado', cantidad: 'Cantidad', kg: 'Kg', kg_unidad: 'Kg por unidad', cliente: 'Cliente', numero: 'Número', descripcion: 'Descripción', unidad: 'Unidad', grupo: 'Grupo',
+    horas: 'Horas', horas_extra: 'Horas extra', estimada: 'Estimado', costo_estimado: 'Costo estimado', estado_costo: 'Tipo de costo', proveedor: 'Proveedor', fecha: 'Fecha', tipo: 'Tipo',
+    codigo: 'Código', usuario: 'Usuario', tarifa_id: 'Tarifa', valor: 'Valor', clave: 'Parámetro', neto: 'Neto', terminadas: 'Terminadas', kg_cotizados: 'Kg cotizados', kg_producidos: 'Kg producidos',
+    fecha_entrega: 'Entrega', ppto_horas: 'HH cotizadas', ot_id: 'OT', doc_ref: 'Documento', nota: 'Nota', inicio: 'Inicio', fin: 'Término', piezas: 'Piezas'}
+};
+function audDet(t, r) {
+  const o = id => T_.ots.find(x => x.id === id)?.numero || '?';
+  switch (t) {
+    case 'ots': return `${r.numero} · ${r.cliente || ''}`;
+    case 'ot_ppto': return 'Cotización de ' + o(r.ot_id);
+    case 'materiales': return r.nombre + (r.grupo ? ` (${r.grupo})` : '');
+    case 'tarifas': case 'maquinas': case 'procesos': case 'operaciones': return r.nombre;
+    case 'dias_especiales': return `${r.fecha} ${r.descripcion || ''}`;
+    case 'config': return r.clave;
+    case 'perfiles': return `${r.nombre} (${r.usuario || ''})`;
+    case 'hh_registros': case 'asistencia': return `${T_.perfiles.find(x => x.id === r.perfil_id)?.nombre || '?'} · ${r.fecha || ''}${r.ot_id ? ' · OT ' + o(r.ot_id) : ''}`;
+    case 'consumos': case 'servicios': return `${r.descripcion || T_.materiales.find(x => x.id === r.material_id)?.nombre || T_.procesos.find(x => x.id === r.proceso_id)?.nombre || ''} · OT ${o(r.ot_id)}`;
+    case 'stock_ingresos': return `${T_.materiales.find(x => x.id === r.material_id)?.nombre || '?'} · ${r.cantidad} un`;
+    case 'ot_stock': return `${r.descripcion} · OT ${o(r.ot_id)}`;
+    case 'compras': return `${r.numero || 's/n'} · ${r.proveedor || ''} · OT ${o(r.ot_id)}`;
+    case 'documentos': return `${r.nombre} · OT ${o(r.ot_id)}`;
+    case 'produccion': return `OT ${o(r.ot_id)} · ${r.kg} kg`;
+    default: return String(r.id ?? '');
+  }
+}
+let T_ = null;   // tablas del demo, para audDet
+
 /* ================================================================ BACKEND DEMO
    Replica en el navegador lo que hacen los triggers de schema.sql */
 const Demo = (() => {
   const KEY = 'taller-demo-v1';
   let T = null;
+  const audit = (op, t, r, old) => {
+    T_ = T; const modo = t === 'perfiles' && op === 'INSERT' ? 'todo' : AUD.modo[t]; if (!modo || !S.me) return;
+    if (op === 'INSERT' && modo === 'cambios') return;
+    const IGN = ['creado', 'creada', 'id', 'total']; let camb = {};
+    if (op === 'UPDATE') {
+      Object.keys(r).forEach(k => { if (!IGN.includes(k) && JSON.stringify(r[k]) !== JSON.stringify(old[k])) camb[k] = [old[k] ?? null, r[k] ?? null]; });
+      if (!Object.keys(camb).length) return;
+      if (['hh_registros', 'asistencia'].includes(t) && r.perfil_id === S.me.id) return;
+      if (t === 'hh_registros' && !['horas', 'horas_extra', 'inicio', 'fin', 'ot_id', 'operacion_id', 'maquina_id', 'tipo', 'fecha', 'perfil_id', 'motivo'].some(k => k in camb)) return;
+    } else Object.keys(r).forEach(k => { if (!IGN.includes(k) && r[k] != null) camb[k] = op === 'INSERT' ? [null, r[k]] : [r[k], null]; });
+    T.auditoria.push({id: nid('auditoria'), fecha: new Date().toISOString(), usuario_id: S.me.id, usuario_nombre: S.me.nombre, usuario_rol: S.me.rol, seccion: AUD.seccion[t] || 'Plataforma',
+      accion: op === 'INSERT' ? 'crear' : op === 'UPDATE' ? 'modificar' : 'eliminar', tabla: t, registro: String(r.id ?? r.ot_id ?? r.clave ?? r.fecha ?? ''), detalle: audDet(t, r), cambios: camb});
+  };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(T)); } catch (e) {} };
   const nid = t => (T._seq[t] = (T._seq[t] || 0) + 1);
   const PK = {config: 'clave', ot_ppto: 'ot_id', dias_especiales: 'fecha', hh_costo: 'registro_id'};
@@ -375,7 +429,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 8) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 9) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -386,11 +440,11 @@ const Demo = (() => {
     async ins(t, row) { const r = {...(defaults[t]?.() || {}), ...row}; if (pk(t) === 'id' && r.id == null) r.id = t === 'perfiles' ? 'p' + (100 + nid(t)) : nid(t);
       if (t === 'asistencia' && T.asistencia.some(a => a.perfil_id === r.perfil_id && a.fecha === r.fecha)) throw new Error('Ya hay asistencia para ese día');
       if (t === 'hh_registros' && !closed(r) && T.hh_registros.some(x => x.perfil_id === r.perfil_id && !closed(x))) throw new Error('Ya tienes una tarea abierta');
-      before(t, r, null); T[t].push(r); after(t, r, 'INSERT'); save(); return r; },
+      before(t, r, null); T[t].push(r); after(t, r, 'INSERT'); audit('INSERT', t, r); save(); return r; },
     async upd(t, id, patch) { const k = pk(t); const i = T[t].findIndex(x => x[k] === id); if (i < 0) throw new Error('No encontrado');
-      const old = T[t][i], r = {...old, ...patch}; before(t, r, old); T[t][i] = r; after(t, r, 'UPDATE'); save(); return r; },
+      const old = T[t][i], r = {...old, ...patch}; before(t, r, old); T[t][i] = r; after(t, r, 'UPDATE'); audit('UPDATE', t, r, old); save(); return r; },
     async upsert(t, row) { const k = pk(t); return T[t].some(x => x[k] === row[k]) ? api.upd(t, row[k], row) : api.ins(t, row); },
-    async del(t, id) { const k = pk(t); const r = T[t].find(x => x[k] === id); T[t] = T[t].filter(x => x[k] !== id); if (r) after(t, r, 'DELETE'); save(); },
+    async del(t, id) { const k = pk(t); const r = T[t].find(x => x[k] === id); T[t] = T[t].filter(x => x[k] !== id); if (r) { after(t, r, 'DELETE'); audit('DELETE', t, r); } save(); },
     async hhQuery() { return null; }, // en demo todo está cargado
     async insMany(t, rows) { const out = []; for (const r of rows) out.push(await api.ins(t, r)); return out; },
     async rpc(name, a) {
@@ -402,6 +456,8 @@ const Demo = (() => {
     },
     async subirDoc(file, otId) { const path = `demo/ot-${otId}/${Date.now()}-${limpiarNombre(file.name)}`; demoArchivos.set(path, URL.createObjectURL(file)); return path; },
     async urlDoc(path) { return demoArchivos.get(path) || null; },
+    async leerOT() { await new Promise(r => setTimeout(r, 900)); return {numero: 'OT-2650', cliente: 'Minera Ejemplo S.A.', descripcion: 'Fabricación de 8 spools de cañería 6 pulg A106', cantidad: 8, unidad: 'spool', kg_cotizados: 3200, fecha_entrega: addDays(hoy(), 21), ppto_horas: 260, precio_venta: 9800000, tipo_documento: 'orden_compra', advertencias: ['Ejemplo de demostración: en la app real se lee tu documento.']}; },
+    async auditoria() { return [...T.auditoria].sort((a, b) => b.id - a.id); },
     async cambiarClave() { await new Promise(r => setTimeout(r, 300)); },
     async eliminarUsuario(id, clave) {
       if (!clave) throw new Error('Tu clave no es correcta.');
@@ -419,7 +475,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 8, _seq: {}, produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 9, _seq: {}, auditoria: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -601,6 +657,15 @@ const Cloud = (() => {
           || (st === 404 ? 'La función gestionar-usuarios no está instalada en Supabase.' : 'No se pudo completar la acción.')); }
       return data;
     },
+    async leerOT(archivo, tipo) {
+      const {data, error} = await sb.functions.invoke('leer-ot', {body: {archivo, tipo}});
+      if (error) { let code = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; } catch (e) {}
+        throw new Error(({tope: 'Se alcanzó el tope diario de lecturas con IA. Crea la OT a mano o prueba mañana.', sin_permiso: 'Tu usuario no tiene permiso para leer documentos con IA.',
+          sin_clave: 'Falta la clave de IA en Supabase (secreto ANTHROPIC_API_KEY).', muy_pesado: 'El archivo es muy pesado (máximo 15 MB).', anthropic: 'El servicio de IA no respondió. Inténtalo de nuevo.'})[code]
+          || (st === 404 ? 'La función leer-ot no está instalada en Supabase.' : 'No se pudo leer el documento con IA.')); }
+      return data.ot;
+    },
+    async auditoria() { const {data, error} = await sb.from('auditoria').select('*').order('id', {ascending: false}).limit(3000); if (error) throw error; return data; },
     cambiarClave(usuario_id, clave) { return this.gestionarUsuario({accion: 'cambiar_clave', usuario_id, clave}); },
     eliminarUsuario(usuario_id, clave_admin) { return this.gestionarUsuario({accion: 'eliminar', usuario_id, clave_admin}); },
     async hhQuery({desde, hasta, ot}) { let q = () => { let x = sb.from('v_hh').select('*'); if (desde) x = x.gte('fecha', desde); if (hasta) x = x.lte('fecha', hasta); if (ot) x = x.eq('ot_id', ot); return x.order('id'); }; return all(q); }
@@ -713,8 +778,8 @@ const TABS = {
   operario: [['dia', 'Mi día']],
   bodega: [['bodega', 'Bodega'], ['dia', 'Mi día']],
   jefe: [['dia', 'Mi día'], ['validar', 'Validar horas'], ['ots', 'Órdenes de trabajo'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega']],
-  gerencia: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes']],
-  admin: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes'], ['ajustes', 'Ajustes'], ['dia', 'Mi día']]
+  gerencia: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes'], ['ajustes', 'Ajustes']],
+  admin: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes'], ['cambios', 'Cambios'], ['ajustes', 'Ajustes'], ['dia', 'Mi día']]
 };
 function render() {
   const app = document.getElementById('app');
@@ -722,7 +787,7 @@ function render() {
   if (!S.me.activo && !DEMO) { app.innerHTML = vInactivo(); return; }
   const tabs = TABS[role()] || TABS.operario;
   if (!tabs.some(t => t[0] === (S.tab === 'ot' ? 'ots' : S.tab))) S.tab = tabs[0][0];
-  const views = {dia: vDia, validar: vValidar, ots: vOTs, ot: vOTDetalle, servicios: vServicios, bodega: vBodega, resumen: vResumen, reportes: vReportes, ajustes: vAjustes};
+  const views = {dia: vDia, validar: vValidar, ots: vOTs, ot: vOTDetalle, servicios: vServicios, bodega: vBodega, resumen: vResumen, reportes: vReportes, ajustes: vAjustes, cambios: vCambios};
   const cur = S.tab === 'ot' ? 'ots' : S.tab;
   app.innerHTML = `
   ${DEMO ? `<div class="demo"><div class="wrap"><strong>Modo demostración</strong><span>Datos de ejemplo, guardados solo en este navegador.</span>
@@ -945,7 +1010,7 @@ function vOTs() {
   const filt = S.ui.otFiltro;
   const ots = S.d.ots.filter(o => filt === 'todas' || (filt === 'activas' ? ['en_proceso', 'cotizada'].includes(o.estado) : ['terminada', 'entregada'].includes(o.estado)))
     .sort((a, b) => (a.estado === 'en_proceso' ? 0 : 1) - (b.estado === 'en_proceso' ? 0 : 1) || (a.fecha_entrega || '9').localeCompare(b.fecha_entrega || '9'));
-  return `<div class="row between"><h1>Órdenes de trabajo</h1><div class="row"><button class="btn" data-act="prod-new">+ Registrar producción</button><button class="btn pri" data-act="ot-new">+ Nueva OT</button></div></div>
+  return `<div class="row between"><h1>Órdenes de trabajo</h1><div class="row"><button class="btn" data-act="prod-new">+ Registrar producción</button><button class="btn" data-act="ot-ia">Agregar OT con documento</button><button class="btn pri" data-act="ot-new">+ Nueva OT</button></div></div>
   <div class="seg" style="max-width:420px">${[['activas', 'Activas'], ['cerradas', 'Terminadas'], ['todas', 'Todas']].map(([k, l]) => `<button data-act="ot-filtro" data-k="${k}" aria-pressed="${filt === k}">${l}</button>`).join('')}</div>
   <div class="grid3">${ots.map(otCard).join('') || '<div class="empty">No hay OT en este filtro.</div>'}</div>`;
 }
@@ -1009,10 +1074,10 @@ function vOTDetalle() {
       <details><summary class="small">Por persona</summary><div class="kv small" style="margin-top:8px">${Object.entries(porPer).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><span class="v">${hrs(v)}</span>`).join('')}</div></details></div>
     <div class="card"><div class="row between"><h3>Materiales</h3><span class="muted small">${c.kgMat ? kg(c.kgMat) : ''}${adm ? `${c.kgMat ? ' · ' : ''}${clp(c.mat)}` : ''}</span></div>
       ${c.cons.length ? `<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="n">Cant.</th><th class="n">Kg</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.cons.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}${x.origen === 'compra_directa' ? ' <span class="chip">compra directa</span>' : x.origen === 'stock_ot' ? ' <span class="chip acc">stock OT</span>' : ''}</td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td>
-        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td>${isAdmin() ? `<button class="btn ghost" data-act="costo-edit" data-t="consumos" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin consumos.</div>'}</div>
+        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td>${verCostos() ? `<button class="btn ghost" data-act="costo-edit" data-t="consumos" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin consumos.</div>'}</div>
     <div class="card"><div class="row between"><h3>Pintura, tratamiento térmico y servicios</h3>${adm ? `<span class="muted small">${clp(c.serv)}</span>` : ''}</div>
       ${c.servL.length ? `<div class="tbl-wrap"><table><thead><tr><th>Servicio</th><th class="n">Cant.</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.servL.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}<div class="tiny muted">${TIPOS_SERV[x.tipo]} · ${x.proveedor ? esc(x.proveedor) : 'propio'}</div></td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td>
-        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td>${isAdmin() ? `<button class="btn ghost" data-act="costo-edit" data-t="servicios" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin servicios.</div>'}
+        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td>${verCostos() ? `<button class="btn ghost" data-act="costo-edit" data-t="servicios" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin servicios.</div>'}
       <button class="btn ghost" data-act="serv-new" data-ot="${o.id}">+ Registrar servicio</button></div>
   </div>`;
 }
@@ -1050,9 +1115,10 @@ function sheetProduccion(otId) {
 }
 function sheetOT(o) {
   o = o || {estado: 'en_proceso', cantidad: 1, unidad: 'pza', terminadas: 0};
-  const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || {};
+  const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || o._p || {};
   const v = x => x == null ? '' : x;
   openModal(o.id ? `Editar ${o.numero}` : 'Nueva OT', `<form data-form="ot"><input type="hidden" name="id" value="${o.id || ''}">
+    ${!o.id && S.ui.otDoc ? `<div class="card" style="background:var(--surface2)"><strong>Datos leídos con IA.</strong> <span class="small">Revísalos y corrige lo que haga falta. Al guardar, el documento queda dentro de la OT.</span>${(o._adv || []).length ? `<div class="small" style="margin-top:6px">${o._adv.map(esc).join('<br>')}</div>` : ''}</div>` : ''}
     <div class="fgrid"><label class="f"><span>N° OT</span><input type="text" name="numero" id="ot-n" value="${esc(o.numero || '')}" required placeholder="OT-2621"></label>
       <label class="f"><span>Estado</span><select name="estado" id="ot-e">${Object.entries(ESTADOS_OT).map(([k, l]) => `<option value="${k}" ${o.estado === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
     <label class="f"><span>Cliente</span><input type="text" name="cliente" id="ot-c" value="${esc(o.cliente || '')}" required></label>
@@ -1062,14 +1128,14 @@ function sheetOT(o) {
       <label class="f"><span>Kg totales cotizados</span><input type="number" name="kg_cotizados" id="ot-kg" min="0" step="any" value="${v(o.kg_cotizados)}" inputmode="decimal"></label>
       <label class="f"><span>Entrega</span><input type="date" name="fecha_entrega" id="ot-f" value="${v(o.fecha_entrega)}"></label>
       <label class="f"><span>HH cotizadas</span><input type="number" name="ppto_horas" id="ot-h" min="0" step="any" value="${v(o.ppto_horas)}"></label></div>
-    ${isAdmin() ? `<div class="label">Cotización (solo administración)</div><div class="fgrid">
+    ${verCostos() ? `<div class="label">Cotización (administración y gerencia)</div><div class="fgrid">
       <label class="f"><span>Mano de obra $</span><input type="number" name="ppto_hh" id="ot-p1" min="0" value="${v(p.ppto_hh)}"></label>
       <label class="f"><span>Materiales $</span><input type="number" name="ppto_material" id="ot-p2" min="0" value="${v(p.ppto_material)}"></label>
       <label class="f"><span>Servicios $</span><input type="number" name="ppto_servicios" id="ot-p3" min="0" value="${v(p.ppto_servicios)}"></label>
       <label class="f"><span>Máquinas $</span><input type="number" name="ppto_maquina" id="ot-p4" min="0" value="${v(p.ppto_maquina)}"></label>
       <label class="f"><span>Precio de venta $</span><input type="number" name="precio_venta" id="ot-p5" min="0" value="${v(p.precio_venta)}"></label></div>
       <p class="small muted">Montos de costo directo, sin gastos generales. La app suma ${cfg('gg_pct')}% de gastos generales a ambos lados. Con los kg cotizados calcula el precio y el costo por kg.</p>` : ''}
-    <div class="row"><button class="btn pri">Guardar</button>${o.id && isAdmin() ? `<button type="button" class="btn danger" data-act="ot-del" data-id="${o.id}">Eliminar</button>` : ''}</div></form>`);
+    <div class="row"><button class="btn pri">Guardar</button>${o.id && verCostos() ? `<button type="button" class="btn danger" data-act="ot-del" data-id="${o.id}">Eliminar</button>` : ''}</div></form>`);
 }
 
 /* ---------------- SERVICIOS */
@@ -1094,7 +1160,7 @@ function sheetServicio(otId) {
       <label class="f" style="grid-column:1/-1"><span>Descripción</span><input type="text" name="desc" id="sv-desc"></label>
       <label class="f"><span>Unidad</span><input type="text" name="unidad" id="sv-u" placeholder="un, m², kg"></label></div>
     <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cant" id="sv-c" step="any" min="0" required></label>
-      ${isAdmin() ? '<label class="f"><span>Costo unitario $ (vacío = según catálogo o pendiente)</span><input type="number" name="cu" id="sv-cu" step="any" min="0"></label>' : '<input type="hidden" name="cu" value="">'}
+      ${verCostos() ? '<label class="f"><span>Costo unitario $ (vacío = según catálogo o pendiente)</span><input type="number" name="cu" id="sv-cu" step="any" min="0"></label>' : '<input type="hidden" name="cu" value="">'}
       <label class="f"><span>Factura / OC</span><input type="text" name="doc" id="sv-doc"></label></div>
     <button class="btn pri">Guardar</button></form>`);
 }
@@ -1138,13 +1204,13 @@ function vBodega() {
       <p class="small muted">El costo del material se recalcula como promedio ponderado entre lo que había en bodega y lo que entra. Los kg se calculan con el peso por unidad del material; si pesaste la carga o la guía trae el peso, escríbelo y se usa ese.</p>
       <button class="btn pri xl">Registrar ingreso</button>${isAdmin() ? '' : ''}</form>
       <div class="card"><div class="row between"><h2>Últimos ingresos</h2><span class="small muted">${kg(sum(S.d.stock_ingresos.filter(x => x.fecha >= hoy().slice(0, 8) + '01'), x => x.kg))} este mes</span></div><div class="list">${rec.map(x => { const m = byId(S.d.materiales, x.material_id); return `<div class="item"><div class="t">${esc(m?.nombre)}<div class="small muted">${fechaTxt(x.fecha)}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div><div style="text-align:right"><strong>${num(x.cantidad, 2)} ${esc(m?.unidad)}</strong>${x.kg != null && String(m?.unidad).toLowerCase() !== 'kg' ? `<div class="tiny muted">${kg(x.kg)}</div>` : ''}${x.kg == null ? '<div><span class="chip warn">sin kg</span></div>' : ''}</div></div>`; }).join('') || '<div class="empty">Sin ingresos recientes.</div>'}</div>
-      ${isAdmin() ? '<button class="btn ghost" data-act="aj-tab-go" data-k="materiales">Agregar material nuevo al catálogo</button>' : '<p class="small muted">¿El material no está en la lista? Pídele a administración que lo agregue.</p>'}</div></div>`;
+      ${puedeCatMat() ? '<button type="button" class="btn ghost" data-act="cat-new" data-k="materiales">+ Material nuevo al catálogo</button>' : '<p class="small muted">¿El material no está en la lista? Pídele a administración que lo agregue.</p>'}</div></div>`;
   } else {
     const verCosto = verCostos() || role() === 'bodega';
     const fila = m => `<tr><td>${esc(m.codigo || '')}</td><td style="white-space:normal;${m.grupo ? 'padding-left:22px' : ''}">${esc(m.nombre)}</td><td class="n">${num(m.stock, 2)} ${esc(m.unidad)}</td>
       <td class="n">${kgMov(m, m.stock) != null ? num(kgMov(m, m.stock), 0) : '<span class="muted" title="Sin peso por unidad (Ajustes › Materiales). Los consumibles como gas o discos pueden quedar sin peso.">—</span>'}</td><td class="n">${num(m.stock_min, 2)}</td>
       ${verCosto ? `<td class="n">${m.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(m.costo_unit)}${m.costo_estimado ? ' <span class="chip est">est.</span>' : ''}</td><td class="n">${m.costo_unit != null ? clp(Math.max(0, m.stock) * m.costo_unit) : ''}</td>` : ''}
-      <td>${+m.stock <= +m.stock_min ? '<span class="chip bad">Reponer</span>' : ''}</td></tr>`;
+      <td>${+m.stock <= +m.stock_min ? '<span class="chip bad">Reponer</span> ' : ''}${puedeCatMat() ? `<button type="button" class="btn ghost" data-act="cat-edit" data-k="materiales" data-id="${m.id}">Editar</button>` : ''}</td></tr>`;
     const act = S.d.materiales.filter(m => m.activo);
     body = `<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Material</th><th class="n">Stock</th><th class="n">Stock kg</th><th class="n">Mínimo</th>${verCosto ? '<th class="n">Costo prom.</th><th class="n">Valor</th>' : ''}<th></th></tr></thead><tbody>
       ${grupos().map(g => { const gi = grupoInfo(g), its = act.filter(m => m.grupo === g).sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -1153,7 +1219,7 @@ function vBodega() {
       ${act.filter(m => !m.grupo).length ? `<tr style="background:var(--surface2)"><td></td><td colspan="${verCosto ? 7 : 5}"><strong>Sin grupo</strong></td></tr>${act.filter(m => !m.grupo).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(fila).join('')}` : ''}
       </tbody></table></div>
       <p class="small muted">Costo promedio ponderado: se recalcula con cada ingreso. En la fila del grupo, el promedio del grupo según el stock de cada tamaño.</p>
-      ${verCostos() ? '<button class="btn" data-act="csv-stock">Exportar stock</button>' : ''}</div>`;
+      <div class="row">${puedeCatMat() ? '<button class="btn pri" data-act="cat-new" data-k="materiales">+ Material nuevo</button>' : ''}${verCostos() ? '<button class="btn" data-act="csv-stock">Exportar stock</button>' : ''}</div></div>`;
   }
   const stockKg = sum(S.d.materiales.filter(m => m.activo), m => kgMov(m, Math.max(0, +m.stock)));
   return `<div class="row between"><h1>Bodega</h1><span class="chip">${kg(stockKg)} de acero y consumibles en bodega</span></div>${tabsH}${body}`;
@@ -1196,7 +1262,7 @@ function vStockOT() {
     <details ${compras.length <= 3 ? 'open' : ''}><summary class="small">Compras de esta OT (${compras.length})</summary><div class="list" style="margin-top:6px">${compras.map(c => `<div class="item"><div class="t">${esc(c.numero || 'Sin número')} · ${esc(c.proveedor || '')}
         <div class="small muted">${fechaTxt(c.fecha)}${verP && c.total ? ` · total ${clp(c.total)}` : ''}${c.leida_con_ia ? ' · leída con IA' : ''}</div></div>
       <div class="row" style="gap:6px">${docsDe(o.id, c.id).map(docBtn).join('') || `<button class="btn ghost" data-act="doc-new" data-ot="${o.id}" data-compra="${c.id}">Adjuntar documento</button>`}${c.estado === 'pedida' ? `<span class="chip warn">Pedida</span><button class="btn" data-act="compra-recibir" data-id="${c.id}">Marcar recibida</button>` : `<span class="chip ok">Recibida ${c.fecha_recepcion ? fechaTxt(c.fecha_recepcion) : ''}</span>`}
-        ${isAdmin() && !S.d.ot_stock.some(l => l.compra_id === c.id && salidasLinea(l).length) ? `<button class="btn ghost danger" data-act="compra-del" data-id="${c.id}">Eliminar</button>` : ''}</div></div>`).join('')}</div></details>
+        ${verCostos() && !S.d.ot_stock.some(l => l.compra_id === c.id && salidasLinea(l).length) ? `<button class="btn ghost danger" data-act="compra-del" data-id="${c.id}">Eliminar</button>` : ''}</div></div>`).join('')}</div></details>
   </div>`;
 }
 const lineaHtml = (l = {}) => `<div class="ln card" style="padding:10px;gap:8px;box-shadow:none">
@@ -1300,7 +1366,7 @@ async function verDoc(id) {
   const d = byId(S.d.documentos, id);
   openModal(d.nombre, `<div class="small muted">${TIPOS_DOC[d.tipo]} · <span class="ot">${esc(otOf(d.ot_id)?.numero)}</span> · ${fechaTxt(ymd(d.creado))}${d.tamano ? ' · ' + pesoTxt(d.tamano) : ''}${perfil(d.subido_por) ? ' · ' + esc(perfil(d.subido_por).nombre) : ''}${d.nota ? '<br>' + esc(d.nota) : ''}</div>
     <div id="dv-box" class="empty">Cargando…</div>
-    <div class="row"><a class="btn pri" id="dv-link" target="_blank" rel="noopener" hidden>Abrir en pestaña nueva</a>${isAdmin() ? `<button class="btn danger" data-act="doc-del" data-id="${d.id}">Eliminar documento</button>` : ''}</div>`);
+    <div class="row"><a class="btn pri" id="dv-link" target="_blank" rel="noopener" hidden>Abrir en pestaña nueva</a>${verCostos() ? `<button class="btn danger" data-act="doc-del" data-id="${d.id}">Eliminar documento</button>` : ''}</div>`);
   let url = null; try { url = await DB.urlDoc(d.path); } catch (e) { }
   const box = document.getElementById('dv-box'), a = document.getElementById('dv-link'); if (!box) return;
   if (!url) { box.textContent = DEMO ? 'Documento de ejemplo: en la demostración no hay archivo real. Los que subas sí se pueden ver mientras no recargues la página.' : 'No se pudo abrir el archivo.'; return; }
@@ -1321,6 +1387,51 @@ function vDocsOT(o) {
           <td>${ds.map(docBtn).join('') || `<button class="btn ghost" data-act="doc-new" data-ot="${o.id}" data-compra="${c.id}">Adjuntar</button>`}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="small muted">Sin compras con OC para esta OT.</div>'}
     ${sueltos.length ? `<div class="label">Otros documentos</div><div class="list">${sueltos.map(d => `<div class="item"><div class="t">${esc(d.nombre)}<div class="small muted">${TIPOS_DOC[d.tipo]} · ${fechaTxt(ymd(d.creado))}${d.nota ? ' · ' + esc(d.nota) : ''}</div></div>${docBtn(d).replace(/>Ver [^<]*</, '>Ver<')}</div>`).join('')}</div>` : ''}
   </div>`;
+}
+
+
+/* ---------------- CAMBIOS (registro de auditoría, solo administrador) */
+const audFmt = v => v == null ? '—' : typeof v === 'boolean' ? (v ? 'Sí' : 'No') : typeof v === 'number' ? String(Math.round(v * 100) / 100) : typeof v === 'object' ? JSON.stringify(v) : String(v);
+function audFrase(r) {
+  const nom = AUD.nombre[r.tabla] || r.tabla;
+  const verbo = r.accion === 'crear' ? (AUD.agregar.includes(r.tabla) ? 'Se agregó' : 'Se creó') : r.accion === 'eliminar' ? 'Se eliminó' : 'Se modificó';
+  return `${verbo} ${nom}: <strong>${esc(r.detalle || '')}</strong>`;
+}
+function audCambios(r) {
+  const e = Object.entries(r.cambios || {}); if (!e.length) return '';
+  const col = k => AUD.col[k] || k;
+  const rows = e.map(([k, [a, b]]) => r.accion === 'modificar' ? `<div><span class="muted">${esc(col(k))}:</span> ${esc(audFmt(a))} → <strong>${esc(audFmt(b))}</strong></div>`
+    : `<div><span class="muted">${esc(col(k))}:</span> ${esc(audFmt(r.accion === 'crear' ? b : a))}</div>`).join('');
+  const resumen = r.accion === 'modificar' ? e.slice(0, 2).map(([k, [a, b]]) => `${esc(col(k))} ${esc(audFmt(a))} → ${esc(audFmt(b))}`).join(' · ') + (e.length > 2 ? ` · +${e.length - 2}` : '') : `${e.length} datos`;
+  return `<details class="small"><summary class="muted">${resumen}</summary><div style="margin-top:4px">${rows}</div></details>`;
+}
+function vCambios() {
+  if (!isAdmin()) return '<div class="empty">Solo el administrador ve el registro de cambios.</div>';
+  const A = S.ui.aud = S.ui.aud || {rows: null, sec: '', usr: '', acc: '', desde: '', hasta: '', q: '', max: 100};
+  if (A.rows === null) { A.rows = []; A.cargando = true; DB.auditoria().then(r => { A.rows = r || []; A.cargando = false; render(); }).catch(e => { A.cargando = false; A.error = errTxt(e); render(); }); }
+  const dia = r => new Date(r.fecha).toLocaleDateString('en-CA', {timeZone: 'America/Santiago'});
+  const q = A.q.trim().toLowerCase();
+  const filas = A.rows.filter(r => (!A.sec || r.seccion === A.sec) && (!A.usr || r.usuario_id === A.usr) && (!A.acc || r.accion === A.acc) && (!A.desde || dia(r) >= A.desde) && (!A.hasta || dia(r) <= A.hasta)
+    && (!q || `${r.detalle} ${r.usuario_nombre} ${r.seccion} ${JSON.stringify(r.cambios || {})}`.toLowerCase().includes(q)));
+  const usuarios = [...new Map(A.rows.map(r => [r.usuario_id, r.usuario_nombre])).entries()];
+  const secs = [...new Set([...['Órdenes de trabajo', 'Horas hombre', 'Materiales', 'Bodega', 'Compras y documentos', 'Pintura y servicios', 'Costos y tarifas', 'Trabajadores', 'Plataforma'], ...A.rows.map(r => r.seccion)])];
+  const hora = r => new Date(r.fecha).toLocaleString('es-CL', {timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
+  const chipAcc = {crear: 'ok', modificar: 'run', eliminar: 'bad'};
+  return `<div class="row between"><h1>Cambios</h1><button class="btn" data-act="aud-reload">Actualizar</button></div>
+  <p class="small muted">Quién creó, modificó o eliminó datos en la app. Solo lo ve el administrador y no se puede editar ni borrar. Las marcaciones de horas de cada trabajador y las validaciones diarias no se anotan; sí las correcciones que otra persona hace.</p>
+  <div class="card"><div class="fgrid">
+    <label class="f"><span>Sección</span><select data-change="aud-f" data-k="sec"><option value="">Todas</option>${secs.map(x => `<option ${A.sec === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+    <label class="f"><span>Usuario</span><select data-change="aud-f" data-k="usr"><option value="">Todos</option>${usuarios.map(([id, n]) => `<option value="${esc(id)}" ${A.usr === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+    <label class="f"><span>Acción</span><select data-change="aud-f" data-k="acc"><option value="">Todas</option>${[['crear', 'Creó o agregó'], ['modificar', 'Modificó'], ['eliminar', 'Eliminó']].map(([k, l]) => `<option value="${k}" ${A.acc === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="f"><span>Desde</span><input type="date" data-change="aud-f" data-k="desde" value="${esc(A.desde)}"></label>
+    <label class="f"><span>Hasta</span><input type="date" data-change="aud-f" data-k="hasta" value="${esc(A.hasta)}"></label>
+    <label class="f"><span>Buscar</span><input type="search" data-change="aud-f" data-k="q" value="${esc(A.q)}" placeholder="OT, material, nombre…"></label></div></div>
+  <div class="card">${A.cargando ? '<div class="empty">Cargando…</div>' : A.error ? `<div class="empty">${esc(A.error)}<br>¿Ya ejecutaste migracion-auditoria.sql en Supabase?</div>` : `
+    <div class="small muted" style="margin-bottom:8px">${filas.length} cambio${filas.length === 1 ? '' : 's'}${A.rows.length >= 3000 ? ' (se muestran los 3.000 más recientes)' : ''}</div>
+    <div class="list">${filas.slice(0, A.max).map(r => `<div class="item"><div class="t">${audFrase(r)}
+      <div class="small muted">${hora(r)} · ${esc(r.usuario_nombre || 'Sistema')} <span class="chip">${esc(ROLES[r.usuario_rol] || r.usuario_rol || '')}</span></div>${audCambios(r)}</div>
+      <div style="text-align:right"><span class="chip ${chipAcc[r.accion]}">${esc(r.accion === 'crear' ? 'Creó' : r.accion === 'eliminar' ? 'Eliminó' : 'Modificó')}</span><div class="tiny muted" style="margin-top:4px">${esc(r.seccion)}</div></div></div>`).join('') || '<div class="empty">Sin cambios con estos filtros.</div>'}</div>
+    ${filas.length > A.max ? '<div class="row" style="justify-content:center;margin-top:10px"><button class="btn" data-act="aud-mas">Mostrar más</button></div>' : ''}`}</div>`;
 }
 
 /* ---------------- RESUMEN (admin) */
@@ -1445,7 +1556,7 @@ function vReportes() {
 
 /* ---------------- AJUSTES (admin) */
 const CAT = {
-  trabajadores: {t: 'perfiles', title: 'Trabajadores', fields: [['nombre', 'Nombre', 'text'], ['rol', 'Rol', 'sel', () => Object.entries(ROLES)], ['tarifa_id', 'Categoría / tarifa', 'sel', () => [['', 'Sin tarifa'], ...S.d.tarifas.map(t => [t.id, t.nombre])]], ['activo', 'Activo', 'bool']],
+  trabajadores: {t: 'perfiles', title: 'Trabajadores', fields: [['nombre', 'Nombre', 'text'], ['rol', 'Rol', 'sel', () => Object.entries(ROLES).filter(([k]) => isAdmin() || !['admin', 'gerencia'].includes(k))], ['tarifa_id', 'Categoría / tarifa', 'sel', () => [['', 'Sin tarifa'], ...S.d.tarifas.map(t => [t.id, t.nombre])]], ['activo', 'Activo', 'bool']],
     cols: [['nombre', 'Nombre'], ['usuario', 'Usuario'], [r => ROLES[r.rol], 'Rol'], [r => byId(S.d.tarifas, r.tarifa_id)?.nombre || '—', 'Tarifa'], [r => r.activo ? '<span class="chip ok">Activo</span>' : '<span class="chip">Inactivo</span>', 'Estado']]},
   tarifas: {t: 'tarifas', title: 'Costo HH por categoría', help: 'Costo empresa por hora: sueldo + leyes sociales + bonos, dividido por las horas normales del mes. Puedes crear una por persona si su costo es distinto. Marca "estimado" si aún no tienes el dato exacto.',
     fields: [['nombre', 'Categoría o nombre', 'text'], ['costo_hh', 'Costo hora normal $', 'num'], ['costo_hh_extra', 'Costo hora extra $', 'num'], ['estimada', 'Valor estimado', 'bool']],
@@ -1463,9 +1574,12 @@ const CAT = {
   operaciones: {t: 'operaciones', title: 'Operaciones', fields: [['nombre', 'Nombre', 'text'], ['activa', 'Activa', 'bool']], cols: [['nombre', 'Operación'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
   dias: {t: 'dias_especiales', key: 'fecha', title: 'Feriados', help: 'En estos días (y los domingos) todas las horas cuentan como extra.', fields: [['fecha', 'Fecha', 'date'], ['descripcion', 'Descripción', 'text']], cols: [[r => fechaTxt(r.fecha), 'Fecha'], ['descripcion', 'Descripción']]}
 };
+const AJ_GERENCIA = ['trabajadores', 'tarifas', 'materiales', 'procesos', 'maquinas'];   // lo demás es de la plataforma: solo administrador
 function vAjustes() {
+  const ok = kk => isAdmin() || AJ_GERENCIA.includes(kk);
+  if (!ok(S.ui.ajTab)) S.ui.ajTab = 'trabajadores';
   const k = S.ui.ajTab, c = CAT[k];
-  const tabs = `<div class="tabs" style="padding:0">${[...Object.entries(CAT).map(([kk, v]) => [kk, v.title]), ['param', 'Parámetros']].map(([kk, l]) => `<button class="tab" data-act="aj-tab" data-k="${kk}" aria-current="${kk === k}">${l}</button>`).join('')}</div>`;
+  const tabs = `<div class="tabs" style="padding:0">${[...Object.entries(CAT).map(([kk, v]) => [kk, v.title]), ['param', 'Parámetros']].filter(([kk]) => ok(kk)).map(([kk, l]) => `<button class="tab" data-act="aj-tab" data-k="${kk}" aria-current="${kk === k}">${l}</button>`).join('')}</div>`;
   if (k === 'param') return `<h1>Ajustes</h1>${tabs}<form class="card" data-form="param" style="max-width:560px">
     <label class="f"><span>Gastos generales (% sobre costo directo)</span><input type="number" name="gg_pct" id="pa-gg" step="any" min="0" value="${cfg('gg_pct')}"></label>
     <label class="f"><span>Jornada diaria normal (horas). Lo que pase de esto se cuenta como hora extra.</span><input type="number" name="jornada_horas" id="pa-j" step="0.25" min="1" value="${cfg('jornada_horas')}"></label>
@@ -1559,7 +1673,25 @@ const ACT = {
   'go-validar': el => { S.ui.valFecha = el.dataset.f; S.tab = 'validar'; render(); },
   'go-stock': () => { S.ui.bodTab = 'stock'; S.tab = 'bodega'; render(); },
   'ot-filtro': el => { S.ui.otFiltro = el.dataset.k; render(); },
-  'ot-new': () => sheetOT(),
+  'ot-new': () => { S.ui.otDoc = null; sheetOT(); },
+  'ot-ia': () => { S.ui.otDoc = null; openModal('Agregar OT con documento', `<div class="stack"><p class="small muted">Sube la OT, la cotización o la orden de compra del cliente (PDF o foto). La IA llena el formulario y el documento queda guardado dentro de la OT. Tú revisas los datos antes de crear la OT.</p>
+      <label class="f"><span>Documento (PDF o foto; máximo 15 MB)</span><input type="file" id="oi-file" accept="application/pdf,image/*"></label>
+      <button type="button" class="btn pri xl" data-act="ot-ia-leer">Leer con IA</button><p class="small muted" id="oi-msg"></p></div>`); },
+  'ot-ia-leer': async el => {
+    const f = document.getElementById('oi-file').files[0], msg = document.getElementById('oi-msg');
+    if (!f && !DEMO) return toast('Primero elige el documento');
+    if (f && f.size > 15 * 1024 * 1024) return toast('El archivo es muy pesado (máximo 15 MB)');
+    el.disabled = true; msg.textContent = 'Leyendo el documento… puede tardar unos 15 segundos.';
+    try {
+      const a = f ? await archivoB64(f) : {};
+      const r = await DB.leerOT(a.b64, a.tipo);
+      const tipo = ['orden_compra', 'cotizacion', 'plano'].includes(r.tipo_documento) ? r.tipo_documento : 'otro';
+      S.ui.otDoc = f ? {file: f, tipo} : {demo: true, tipo};
+      closeModal();
+      sheetOT({estado: 'en_proceso', cantidad: r.cantidad || 1, unidad: r.unidad || 'pza', terminadas: 0, numero: r.numero || '', cliente: r.cliente || '', descripcion: r.descripcion || '',
+        kg_cotizados: r.kg_cotizados, fecha_entrega: r.fecha_entrega, ppto_horas: r.ppto_horas, _p: verCostos() && r.precio_venta ? {precio_venta: r.precio_venta} : null, _adv: r.advertencias || []});
+    } catch (e) { msg.textContent = errTxt(e); } finally { el.disabled = false; }
+  },
   'ot-open': async el => { S.ui.otId = +el.dataset.id; S.tab = 'ot'; const o = otOf(S.ui.otId); if (!DEMO && o?.estado === 'entregada') { try { await mergeHH({ot: o.id}); } catch (e) {} } render(); window.scrollTo(0, 0); },
   'ot-edit': el => sheetOT(otOf(+el.dataset.id)),
   'ot-del': el => openModal('Eliminar OT', `<p>Solo se puede eliminar una OT sin horas, materiales ni servicios registrados.</p><div class="row"><button class="btn danger" data-act="ot-del-ok" data-id="${el.dataset.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`),
@@ -1636,8 +1768,13 @@ const ACT = {
   'item-del': el => run(() => DB.del(el.dataset.t, +el.dataset.id), 'Ítem eliminado'),
   'aj-tab': el => { S.ui.ajTab = el.dataset.k; render(); },
   'aj-tab-go': el => { S.ui.ajTab = el.dataset.k; S.tab = 'ajustes'; render(); },
+  'aud-reload': () => { if (S.ui.aud) S.ui.aud.rows = null; render(); },
+  'aud-mas': () => { S.ui.aud.max += 150; render(); },
   'cat-new': el => sheetCat(el.dataset.k),
-  'cat-edit': el => sheetCat(el.dataset.k, el.dataset.id),
+  'cat-edit': el => {
+    if (el.dataset.k === 'trabajadores' && !isAdmin() && ['admin', 'gerencia'].includes(byId(S.d.perfiles, el.dataset.id)?.rol)) return toast('Solo el administrador puede modificar a este usuario');
+    sheetCat(el.dataset.k, el.dataset.id);
+  },
   'cat-del': el => { const c = CAT[el.dataset.k]; const id = c.key ? el.dataset.id : +el.dataset.id; run(() => DB.del(c.t, id), 'Eliminado'); },
   'rep-mes': async el => { const n = +el.dataset.n; const f = hoy(); let [y, m] = f.split('-').map(Number); m += n; if (m < 1) { m = 12; y--; }
     const d = `${y}-${String(m).padStart(2, '0')}-01`; const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -1702,7 +1839,9 @@ const FORMS = {
     if (S.d.ots.some(o => o.numero.toLowerCase() === row.numero.toLowerCase() && o.id !== id)) return toast('Ya existe una OT con ese número');
     return run(async () => {
       const o = id ? await DB.upd('ots', id, row) : await DB.ins('ots', row);
-      if (isAdmin() && ['ppto_hh', 'ppto_material', 'ppto_servicios', 'ppto_maquina', 'precio_venta'].some(k => fd.get(k) !== '')) {
+      const od = S.ui.otDoc; S.ui.otDoc = null;
+      if (!id && od && od.file) { try { await guardarDoc(od.file, {ot_id: o.id, tipo: od.tipo, nota: 'Documento de la OT (leído con IA)'}); } catch (e) { toast('OT creada, pero no se pudo guardar el documento: ' + errTxt(e)); } }
+      if (verCostos() && ['ppto_hh', 'ppto_material', 'ppto_servicios', 'ppto_maquina', 'precio_venta'].some(k => fd.get(k) !== '')) {
         await DB.upsert('ot_ppto', {ot_id: o.id, ppto_hh: n('ppto_hh') || 0, ppto_material: n('ppto_material') || 0, ppto_servicios: n('ppto_servicios') || 0, ppto_maquina: n('ppto_maquina') || 0, precio_venta: n('precio_venta') || 0});
       }
     }, id ? 'OT guardada' : 'OT creada');
@@ -1833,6 +1972,7 @@ document.addEventListener('change', async e => {
   if (k === 'val-fecha') { S.ui.valFecha = e.target.value || hoy(); if (!DEMO && S.ui.valFecha < addDays(hoy(), -62)) await mergeHH({desde: S.ui.valFecha, hasta: S.ui.valFecha}); render(); }
   if (k === 'rep-d') { S.ui.repDesde = e.target.value; await repFetch(); render(); }
   if (k === 'rep-h') { S.ui.repHasta = e.target.value; render(); }
+  if (k === 'aud-f') { const A = S.ui.aud; A[e.target.dataset.k] = e.target.value; A.max = 100; render(); }
 });
 function kgHint() {
   [['cs', 'cs-mat'], ['in', 'in-mat']].forEach(([px, selId]) => {

@@ -30,7 +30,12 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { accion, usuario_id } = body;
     if (typeof usuario_id !== "string" || !usuario_id) return out({ error: "sin_usuario" }, 400);
-    const { data: obj } = await svc.from("perfiles").select("id, rol, activo, usuario").eq("id", usuario_id).maybeSingle();
+    const { data: obj } = await svc.from("perfiles").select("id, nombre, rol, activo, usuario").eq("id", usuario_id).maybeSingle();
+    const { data: yoNombre } = await svc.from("perfiles").select("nombre").eq("id", u.user.id).maybeSingle();
+    // Deja constancia en el registro de cambios (solo lo lee el administrador)
+    const anotar = (accion: string, cambios: unknown) => svc.from("auditoria").insert({
+      usuario_id: u.user.id, usuario_nombre: yoNombre?.nombre ?? "Administrador", usuario_rol: "admin", seccion: "Trabajadores", accion,
+      tabla: "perfiles", registro: usuario_id, detalle: `${obj!.nombre} (${obj!.usuario ?? ""})`, cambios });
     if (!obj) return out({ error: "sin_usuario" }, 404);
 
     // 2a) Cambiar clave
@@ -39,6 +44,7 @@ Deno.serve(async (req) => {
       if (typeof clave !== "string" || clave.length < 6 || clave.length > 72) return out({ error: "clave_corta" }, 400);
       const { error } = await svc.auth.admin.updateUserById(usuario_id, { password: clave });
       if (error) return out({ error: "no_se_pudo", detalle: error.message }, 500);
+      await anotar("modificar", { clave: ["(anterior)", "(cambiada por el administrador)"] });
       return out({ ok: true });
     }
 
@@ -60,6 +66,7 @@ Deno.serve(async (req) => {
       if ((h.count ?? 0) > 0 || (a.count ?? 0) > 0) return out({ error: "tiene_historial" }, 409);
       const { error } = await svc.auth.admin.deleteUser(usuario_id);
       if (error) return out({ error: /foreign key|violates|Database error/i.test(error.message) ? "tiene_historial" : "no_se_pudo", detalle: error.message }, /foreign key|violates|Database error/i.test(error.message) ? 409 : 500);
+      await anotar("eliminar", { nombre: [obj.nombre, null], usuario: [obj.usuario, null], rol: [obj.rol, null] });
       return out({ ok: true });
     }
     return out({ error: "accion" }, 400);

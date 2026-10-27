@@ -466,26 +466,31 @@ create policy leer_ots      on ots             for select to authenticated using
 
 -- Solo administrador
 create policy admin_config  on config      for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
-create policy admin_tarifas on tarifas     for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
+create policy admin_tarifas on tarifas     for all to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
 create policy admin_perfil  on perfiles    for update to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
+-- Gerencia da de alta trabajadores y los activa o desactiva, pero no los elimina,
+-- no toca a administradores/gerencia ni puede dar esos cargos.
+create policy ger_perfil on perfiles for update to authenticated
+  using (mi_rol() = 'gerencia' and rol in ('operario','bodega','jefe'))
+  with check (mi_rol() = 'gerencia' and rol in ('operario','bodega','jefe'));
+
 create policy admin_oper    on operaciones for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
-create policy admin_maq     on maquinas    for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
+create policy admin_maq     on maquinas    for all to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
 create policy admin_dias    on dias_especiales for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
-create policy admin_ppto    on ot_ppto     for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
+create policy admin_ppto    on ot_ppto     for all to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
 create policy admin_costo   on hh_costo    for select to authenticated using (mi_rol() in ('admin','gerencia'));
-create policy ger_tarifas   on tarifas     for select to authenticated using (mi_rol() = 'gerencia');
-create policy ger_ppto      on ot_ppto     for select to authenticated using (mi_rol() = 'gerencia');
 
 -- Catálogos de bodega y servicios
 create policy leer_mat   on materiales for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
-create policy admin_mat  on materiales for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
+create policy admin_mat  on materiales for all to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
+create policy bodega_mat on materiales for all to authenticated using (mi_rol() = 'bodega') with check (mi_rol() = 'bodega');
 create policy leer_proc  on procesos   for select to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
-create policy admin_proc on procesos   for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
+create policy admin_proc on procesos   for all to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
 
 -- OT: jefe y admin crean y editan
 create policy jefe_ots_ins on ots for insert to authenticated with check (mi_rol() in ('jefe','gerencia','admin'));
 create policy jefe_ots_upd on ots for update to authenticated using (mi_rol() in ('jefe','gerencia','admin')) with check (mi_rol() in ('jefe','gerencia','admin'));
-create policy admin_ots_del on ots for delete to authenticated using (mi_rol() = 'admin');
+create policy admin_ots_del on ots for delete to authenticated using (mi_rol() in ('admin','gerencia'));
 
 -- Horas: cada uno ve y registra las suyas; jefe y admin ven y corrigen todas
 create policy hh_leer on hh_registros for select to authenticated
@@ -504,21 +509,21 @@ create policy asis_crear on asistencia for insert to authenticated
 create policy asis_editar on asistencia for update to authenticated
   using (perfil_id = auth.uid() or mi_rol() in ('jefe','gerencia','admin'))
   with check (perfil_id = auth.uid() or mi_rol() in ('jefe','gerencia','admin'));
-create policy asis_borrar on asistencia for delete to authenticated using (mi_rol() = 'admin');
+create policy asis_borrar on asistencia for delete to authenticated using (mi_rol() in ('admin','gerencia'));
 
 -- Consumos y servicios
 create policy cons_leer on consumos for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy cons_crear on consumos for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
-create policy cons_admin_upd on consumos for update to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
-create policy cons_admin_del on consumos for delete to authenticated using (mi_rol() = 'admin');
+create policy cons_admin_upd on consumos for update to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
+create policy cons_admin_del on consumos for delete to authenticated using (mi_rol() in ('admin','gerencia'));
 
 create policy serv_leer on servicios for select to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
 create policy serv_crear on servicios for insert to authenticated with check (mi_rol() in ('jefe','gerencia','admin'));
-create policy serv_admin_upd on servicios for update to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
-create policy serv_admin_del on servicios for delete to authenticated using (mi_rol() = 'admin');
+create policy serv_admin_upd on servicios for update to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
+create policy serv_admin_del on servicios for delete to authenticated using (mi_rol() in ('admin','gerencia'));
 
 create policy ing_leer on stock_ingresos for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
-create policy ing_crear on stock_ingresos for insert to authenticated with check (mi_rol() in ('bodega','admin'));
+create policy ing_crear on stock_ingresos for insert to authenticated with check (mi_rol() in ('bodega','gerencia','admin'));
 
 -- Vista de horas con su costo. Respeta los permisos de quien consulta:
 -- quien no es administrador ve las columnas de costo vacías.
@@ -700,11 +705,11 @@ drop policy if exists ots_editar on ot_stock;    drop policy if exists ots_borra
 create policy compras_leer   on compras for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy compras_crear  on compras for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy compras_editar on compras for update to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin')) with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
-create policy compras_borrar on compras for delete to authenticated using (mi_rol() = 'admin');
+create policy compras_borrar on compras for delete to authenticated using (mi_rol() in ('admin','gerencia'));
 create policy ots_leer   on ot_stock for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy ots_crear  on ot_stock for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy ots_editar on ot_stock for update to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin')) with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
-create policy ots_borrar on ot_stock for delete to authenticated using (mi_rol() = 'admin');
+create policy ots_borrar on ot_stock for delete to authenticated using (mi_rol() in ('admin','gerencia'));
 grant all on compras, ot_stock to authenticated;
 
 -- Tope diario de lecturas con IA (lo usa la función leer-oc)
@@ -751,7 +756,7 @@ drop policy if exists docs_editar on documentos; drop policy if exists docs_borr
 create policy docs_leer   on documentos for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy docs_crear  on documentos for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy docs_editar on documentos for update to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin')) with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
-create policy docs_borrar on documentos for delete to authenticated using (mi_rol() = 'admin');
+create policy docs_borrar on documentos for delete to authenticated using (mi_rol() in ('admin','gerencia'));
 grant all on documentos to authenticated;
 
 -- Carpeta privada para los archivos (solo usuarios de la app con rol)
@@ -765,7 +770,118 @@ create policy "documentos leer" on storage.objects for select to authenticated
 create policy "documentos subir" on storage.objects for insert to authenticated
   with check (bucket_id = 'documentos' and public.mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy "documentos borrar" on storage.objects for delete to authenticated
-  using (bucket_id = 'documentos' and public.mi_rol() = 'admin');
+  using (bucket_id = 'documentos' and public.mi_rol() in ('admin','gerencia'));
+
+-- ---------- Registro de cambios (auditoría) --------------------------
+-- Cada alta, cambio o eliminación que hace un usuario queda anotada con quién, cuándo y qué.
+-- Solo el administrador puede leerla; nadie puede modificarla ni borrarla desde la app.
+create table if not exists auditoria (
+  id bigint generated always as identity primary key,
+  fecha timestamptz not null default now(),
+  usuario_id uuid,
+  usuario_nombre text,
+  usuario_rol text,
+  seccion text not null,
+  accion text not null check (accion in ('crear','modificar','eliminar')),
+  tabla text,
+  registro text,
+  detalle text,
+  cambios jsonb
+);
+create index if not exists auditoria_fecha on auditoria (fecha desc);
+create index if not exists auditoria_seccion on auditoria (seccion, fecha desc);
+alter table auditoria enable row level security;
+drop policy if exists aud_leer on auditoria;
+create policy aud_leer on auditoria for select to authenticated using (mi_rol() = 'admin');
+revoke all on auditoria from anon, authenticated;
+grant select on auditoria to authenticated;
+
+-- Texto que identifica el registro (ej.: "OT-1234 · Minera X")
+create or replace function audit_det(t text, r jsonb) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare x text;
+begin
+  if t = 'ots' then x := coalesce(r->>'numero','') || ' · ' || coalesce(r->>'cliente','');
+  elsif t = 'ot_ppto' then x := 'Cotización de ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), 'OT');
+  elsif t = 'materiales' then x := coalesce(r->>'nombre','') || coalesce(' (' || (r->>'grupo') || ')', '');
+  elsif t in ('tarifas','maquinas','procesos','operaciones') then x := r->>'nombre';
+  elsif t = 'dias_especiales' then x := coalesce(r->>'fecha','') || ' ' || coalesce(r->>'descripcion','');
+  elsif t = 'config' then x := r->>'clave';
+  elsif t = 'perfiles' then x := coalesce(r->>'nombre','') || ' (' || coalesce(r->>'usuario','') || ')';
+  elsif t in ('hh_registros','asistencia') then
+    x := coalesce((select nombre from perfiles where id = (r->>'perfil_id')::uuid), '?') || ' · ' || coalesce(r->>'fecha', left(r->>'entrada', 10), '')
+         || coalesce(' · OT ' || (select numero from ots where id = (r->>'ot_id')::bigint), '');
+  elsif t in ('consumos','servicios') then
+    x := coalesce(r->>'descripcion', (select nombre from materiales where id = (r->>'material_id')::bigint),
+                  (select nombre from procesos where id = (r->>'proceso_id')::bigint), '')
+         || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+  elsif t = 'stock_ingresos' then x := coalesce((select nombre from materiales where id = (r->>'material_id')::bigint), '?') || ' · ' || coalesce(r->>'cantidad','') || ' un';
+  elsif t = 'ot_stock' then x := coalesce(r->>'descripcion','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+  elsif t = 'compras' then x := coalesce(r->>'numero','s/n') || ' · ' || coalesce(r->>'proveedor','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+  elsif t = 'documentos' then x := coalesce(r->>'nombre','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+  elsif t = 'produccion' then x := 'OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?') || ' · ' || coalesce(r->>'kg','') || ' kg';
+  else x := r->>'id';
+  end if;
+  return x;
+end $$;
+
+-- Trigger común. Registra lo que hace una PERSONA (no lo que calculan otros triggers).
+create or replace function auditar() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid(); modo text := coalesce(tg_argv[0], 'todo');
+  n jsonb; o jsonb; r jsonb; camb jsonb; acc text; sec text; pf perfiles%rowtype;
+  ign text[] := array['creado','creada','id','total'];
+begin
+  if uid is null or pg_trigger_depth() > 1 then return null; end if;
+  if tg_op = 'INSERT' and modo = 'cambios' then return null; end if;
+  n := case when tg_op <> 'DELETE' then to_jsonb(new) end;
+  o := case when tg_op <> 'INSERT' then to_jsonb(old) end;
+  r := coalesce(n, o);
+  acc := case tg_op when 'INSERT' then 'crear' when 'UPDATE' then 'modificar' else 'eliminar' end;
+  if tg_op = 'UPDATE' then
+    select jsonb_object_agg(k.key, jsonb_build_array(o->k.key, n->k.key)) into camb
+      from jsonb_object_keys(n) as k(key) where n->k.key is distinct from o->k.key and k.key <> all (ign);
+    if camb is null then return null; end if;
+    if tg_table_name in ('hh_registros','asistencia') and r->>'perfil_id' = uid::text then return null; end if;  -- su propia marcación
+    if tg_table_name = 'hh_registros' and not (camb ?| array['horas','horas_extra','inicio','fin','ot_id','operacion_id','maquina_id','tipo','fecha','perfil_id','motivo']) then
+      return null;   -- aprobar o validar no se anota; sí corregir horas
+    end if;
+  else
+    select jsonb_object_agg(k.key, case when tg_op = 'INSERT' then jsonb_build_array(null, r->k.key) else jsonb_build_array(r->k.key, null) end) into camb
+      from jsonb_object_keys(r) as k(key) where r->k.key <> 'null'::jsonb and k.key <> all (ign);
+  end if;
+  sec := case tg_table_name
+    when 'ots' then 'Órdenes de trabajo' when 'ot_ppto' then 'Órdenes de trabajo' when 'produccion' then 'Órdenes de trabajo'
+    when 'hh_registros' then 'Horas hombre' when 'asistencia' then 'Horas hombre'
+    when 'materiales' then 'Materiales'
+    when 'consumos' then 'Bodega' when 'stock_ingresos' then 'Bodega' when 'ot_stock' then 'Bodega'
+    when 'compras' then 'Compras y documentos' when 'documentos' then 'Compras y documentos'
+    when 'servicios' then 'Pintura y servicios'
+    when 'tarifas' then 'Costos y tarifas' when 'maquinas' then 'Costos y tarifas' when 'procesos' then 'Costos y tarifas'
+    when 'perfiles' then 'Trabajadores'
+    else 'Plataforma' end;
+  -- el primer cambio sobre un usuario recién creado se anota como "alta" del trabajador
+  if tg_table_name = 'perfiles' and tg_op = 'UPDATE'
+     and exists (select 1 from auth.users where id = (r->>'id')::uuid and created_at > now() - interval '2 minutes') then
+    acc := 'crear';
+  end if;
+  select * into pf from perfiles where id = uid;
+  insert into auditoria (usuario_id, usuario_nombre, usuario_rol, seccion, accion, tabla, registro, detalle, cambios)
+  values (uid, pf.nombre, pf.rol, sec, acc, tg_table_name, coalesce(r->>'id', r->>'ot_id', r->>'clave', r->>'fecha'), audit_det(tg_table_name, r), camb);
+  return null;
+end $$;
+
+do $$ declare x record; begin
+  for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('hh_registros','cambios'),('asistencia','cambios'),
+      ('materiales','todo'),('consumos','cambios'),('stock_ingresos','todo'),('ot_stock','cambios'),('compras','todo'),('documentos','todo'),
+      ('servicios','cambios'),('tarifas','todo'),('maquinas','todo'),('procesos','todo'),('perfiles','cambios'),('config','todo'),
+      ('operaciones','todo'),('dias_especiales','todo')) as v(t, m)
+  loop
+    execute format('drop trigger if exists zz_auditar on %I', x.t);
+    execute format('create trigger zz_auditar after insert or update or delete on %I for each row execute function auditar(%L)', x.t, x.m);
+  end loop;
+end $$;
 
 -- ---------- Datos iniciales (editar desde la app) --------------------
 
