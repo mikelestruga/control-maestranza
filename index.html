@@ -221,7 +221,7 @@ const TIPOS_HH = {directa: 'Directa', retrabajo: 'Retrabajo', indirecta: 'Indire
 const TIPOS_DOC = {orden_compra: 'Orden de compra', factura: 'Factura', guia: 'Guía de despacho', cotizacion: 'Cotización', plano: 'Plano', certificado: 'Certificado', otro: 'Otro'};
 const TIPOS_SERV = {pintura: 'Pintura', tratamiento_termico: 'Tratamiento térmico', ensayo: 'Ensayo / END', transporte: 'Transporte', otro: 'Otro'};
 const ESTADOS_OT = {cotizada: 'Cotizada', en_proceso: 'En proceso', terminada: 'Terminada', entregada: 'Entregada'};
-const ROLES = {operario: 'Operario', bodega: 'Bodega', jefe: 'Jefe de taller', admin: 'Administrador'};
+const ROLES = {operario: 'Operario', bodega: 'Bodega', jefe: 'Jefe de taller', gerencia: 'Gerencia', admin: 'Administrador'};
 const MOTIVOS = {
   indirecta: ['Aseo y orden', 'Traslado de material', 'Mantención de equipos', 'Capacitación', 'Charla de seguridad', 'Otra indirecta'],
   improductiva: ['Espera de material', 'Espera de instrucciones o planos', 'Máquina detenida', 'Espera de puente grúa', 'Corte de energía', 'Otra espera']
@@ -237,8 +237,9 @@ const S = {
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
 const role = () => S.me?.rol;
-const isAdmin = () => role() === 'admin';
-const isJefe = () => role() === 'jefe' || role() === 'admin';
+const isAdmin = () => role() === 'admin';                       // cambios de la plataforma, claves, borrados
+const verCostos = () => role() === 'admin' || role() === 'gerencia';   // ve costos y cotizaciones
+const isJefe = () => ['jefe', 'gerencia', 'admin'].includes(role());
 const perfil = id => byId(S.d.perfiles, id);
 const otOf = id => byId(S.d.ots, id);
 const opOf = id => byId(S.d.operaciones, id);
@@ -374,7 +375,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 7) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 8) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -401,6 +402,14 @@ const Demo = (() => {
     },
     async subirDoc(file, otId) { const path = `demo/ot-${otId}/${Date.now()}-${limpiarNombre(file.name)}`; demoArchivos.set(path, URL.createObjectURL(file)); return path; },
     async urlDoc(path) { return demoArchivos.get(path) || null; },
+    async cambiarClave() { await new Promise(r => setTimeout(r, 300)); },
+    async eliminarUsuario(id, clave) {
+      if (!clave) throw new Error('Tu clave no es correcta.');
+      const p = T.perfiles.find(x => x.id === id);
+      if (p?.rol === 'admin' && T.perfiles.filter(x => x.rol === 'admin' && x.activo !== false).length <= 1) throw new Error('No se puede eliminar al único administrador.');
+      if (T.hh_registros.some(r => r.perfil_id === id) || T.asistencia.some(a => a.perfil_id === id)) throw new Error('Este trabajador tiene horas o registros en la app. Eliminarlo borraría costos de las OT: mejor desmárcalo como Activo.');
+      T.perfiles = T.perfiles.filter(x => x.id !== id); save();
+    },
     async borrarArchivo(path) { demoArchivos.delete(path); },
     async leerOC() { await new Promise(r => setTimeout(r, 900)); return {tipo: 'orden_compra', numero: 'OC-4512', proveedor: 'Aceros ejemplo S.A.', fecha: hoy(), neto: 2156000, total: 2565640,
       items: [{codigo: 'HEB200', descripcion: 'Viga HEB 200 A572 Gr50, tira 12 m', cantidad: 4, unidad: 'tira', precio_unitario_neto: 389000, kg_total: 2932.8},
@@ -410,7 +419,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 7, _seq: {}, produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 8, _seq: {}, produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -423,6 +432,7 @@ const Demo = (() => {
     const ps = add('perfiles', [
       {id: 'p-admin', nombre: 'Administración', usuario: 'admin', rol: 'admin'},
       {id: 'p-jefe', nombre: 'Pedro Rojas', usuario: 'projas', rol: 'jefe', tarifa_id: T_('Jefe de taller')},
+      {id: 'p-ger', nombre: 'Marcela Torres', usuario: 'mtorres', rol: 'gerencia'},
       {id: 'p-bod', nombre: 'Ana Vera', usuario: 'avera', rol: 'bodega', tarifa_id: T_('Ayudante')},
       {id: 'p1', nombre: 'Luis Araya', usuario: 'laraya', tarifa_id: T_('Soldador 6G')},
       {id: 'p2', nombre: 'Carlos Muñoz', usuario: 'cmunoz', tarifa_id: T_('Soldador 3G')},
@@ -581,6 +591,18 @@ const Cloud = (() => {
           || (st === 404 ? 'La función leer-oc no está instalada en Supabase.' : 'No se pudo leer el documento con IA.')); }
       return data.compra;
     },
+    async gestionarUsuario(body) {
+      const {data, error} = await sb.functions.invoke('gestionar-usuarios', {body});
+      if (error) { let code = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; } catch (e) {}
+        throw new Error(({sin_permiso: 'Solo el administrador puede hacer esto.', clave_corta: 'La clave debe tener al menos 6 caracteres.', no_autenticado: 'Tu sesión venció. Vuelve a entrar.',
+          sin_usuario: 'No se encontró ese usuario.', clave_incorrecta: 'Tu clave no es correcta.', a_si_mismo: 'No puedes eliminar tu propio usuario.',
+          ultimo_admin: 'No se puede eliminar al único administrador.',
+          tiene_historial: 'Este trabajador tiene horas o registros en la app. Eliminarlo borraría costos de las OT: mejor desmárcalo como Activo.'})[code]
+          || (st === 404 ? 'La función gestionar-usuarios no está instalada en Supabase.' : 'No se pudo completar la acción.')); }
+      return data;
+    },
+    cambiarClave(usuario_id, clave) { return this.gestionarUsuario({accion: 'cambiar_clave', usuario_id, clave}); },
+    eliminarUsuario(usuario_id, clave_admin) { return this.gestionarUsuario({accion: 'eliminar', usuario_id, clave_admin}); },
     async hhQuery({desde, hasta, ot}) { let q = () => { let x = sb.from('v_hh').select('*'); if (desde) x = x.gte('fecha', desde); if (hasta) x = x.lte('fecha', hasta); if (ot) x = x.eq('ot_id', ot); return x.order('id'); }; return all(q); }
   };
 })();
@@ -654,7 +676,7 @@ function costOT(ot) {
     mo: sum(hc, r => r.costo_hh), extra: sum(hc, r => r.costo_extra), maq: sum(hc, r => r.costo_maquina),
     ret: sum(hc.filter(r => r.tipo === 'retrabajo'), r => (+r.costo_hh || 0) + (+r.costo_extra || 0)),
     mat: sum(cons, x => x.total), servT: {}, serv: sum(serv, x => x.total),
-    pendientes: cons.filter(x => x.estado_costo === 'pendiente').length + serv.filter(x => x.estado_costo === 'pendiente').length + hc.filter(r => r.costo_hh == null && isAdmin()).length,
+    pendientes: cons.filter(x => x.estado_costo === 'pendiente').length + serv.filter(x => x.estado_costo === 'pendiente').length + hc.filter(r => r.costo_hh == null && verCostos()).length,
     est: sum(hc.filter(r => r.costo_estimado), r => (+r.costo_hh || 0) + (+r.costo_extra || 0) + (+r.costo_maquina || 0)) + sum(cons.filter(x => x.estado_costo === 'estimado'), x => x.total) + sum(serv.filter(x => x.estado_costo === 'estimado'), x => x.total),
     abiertas: open.length, hh, cons, servL: serv
   };
@@ -691,6 +713,7 @@ const TABS = {
   operario: [['dia', 'Mi día']],
   bodega: [['bodega', 'Bodega'], ['dia', 'Mi día']],
   jefe: [['dia', 'Mi día'], ['validar', 'Validar horas'], ['ots', 'Órdenes de trabajo'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega']],
+  gerencia: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes']],
   admin: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes'], ['ajustes', 'Ajustes'], ['dia', 'Mi día']]
 };
 function render() {
@@ -883,7 +906,7 @@ function sheetManual(pid, fecha, rec) { // operario (pid = yo) o jefe (otro / ed
 /* ---------------- VALIDAR (jefe) */
 function vValidar() {
   const f = S.ui.valFecha || hoy();
-  const gente = S.d.perfiles.filter(p => p.activo && p.rol !== 'admin' || S.d.hh.some(r => r.perfil_id === p.id && r.fecha === f));
+  const gente = S.d.perfiles.filter(p => p.activo && !['admin', 'gerencia'].includes(p.rol) || S.d.hh.some(r => r.perfil_id === p.id && r.fecha === f));
   const rows = gente.map(p => ({p, q: cuadre(p.id, f)})).sort((a, b) => a.p.nombre.localeCompare(b.p.nombre));
   const cuadrados = rows.filter(x => x.q.st === 'ok' && x.q.pend);
   const problemas = rows.filter(x => ['bad', 'warn'].includes(x.q.st)).length;
@@ -937,19 +960,19 @@ function otCard(o) {
       <div class="bar"><i class="${ratio > 1 ? 'over' : ratio > .9 ? 'warn' : ''}" style="width:${Math.min(100, ratio * 100)}%"></i></div></div>
     ${c.kgCot ? `<div><div class="row between small"><span>Producido ${kg(c.kgProd)} de ${kg(c.kgCot)}</span><span class="muted">${pct(c.avanceKg * 100)}</span></div><div class="bar"><i style="width:${Math.min(100, c.avanceKg * 100)}%;background:var(--ok)"></i></div></div>`
       : +o.cantidad > 1 ? `<div><div class="row between small"><span>Piezas terminadas ${num(o.terminadas, 0)} de ${num(o.cantidad, 0)}</span><span class="muted">${pct(c.avancePiezas * 100)}</span></div><div class="bar"><i style="width:${Math.min(100, c.avancePiezas * 100)}%;background:var(--ok)"></i></div></div>` : ''}
-    ${isAdmin() ? `<div><div class="row between small"><span>Costo ${clp(c.total)}${c.pTotal ? ` de ${clp(c.pTotal)}` : ''}</span><span class="muted">${c.pTotal ? pct(ratioC * 100) : ''}</span></div>
+    ${verCostos() ? `<div><div class="row between small"><span>Costo ${clp(c.total)}${c.pTotal ? ` de ${clp(c.pTotal)}` : ''}</span><span class="muted">${c.pTotal ? pct(ratioC * 100) : ''}</span></div>
       <div class="bar"><i class="${ratioC > 1 ? 'over' : ratioC > .9 ? 'warn' : ''}" style="width:${Math.min(100, ratioC * 100)}%"></i></div></div>` : ''}
     <div class="row" style="gap:6px">${atras ? '<span class="chip bad">Atrasada</span>' : ''}${c.abiertas ? `<span class="chip run"><span class="dot"></span> ${c.abiertas} trabajando</span>` : ''}
       ${c.horasRet ? `<span class="chip bad">${hrs(c.horasRet)} retrabajo</span>` : ''}
-      ${isAdmin() && c.pendientes ? `<span class="chip warn">${c.pendientes} costos sin dato</span>` : ''}
-      ${isAdmin() && c.estPct >= 1 ? `<span class="chip est">${pct(c.estPct)} estimado</span>` : ''}
-      ${isAdmin() && c.margen != null && o.estado !== 'cotizada' ? `<span class="chip ${c.margen < 0 ? 'bad' : 'ok'}">Margen ${clp(c.margen)}</span>` : ''}
-      ${isAdmin() && c.proyKg ? `<span class="chip ${c.pptoKg && c.proyKg > c.pptoKg ? 'bad' : ''}">${clp(c.proyKg)}/kg proyectado</span>` : ''}</div>
+      ${verCostos() && c.pendientes ? `<span class="chip warn">${c.pendientes} costos sin dato</span>` : ''}
+      ${verCostos() && c.estPct >= 1 ? `<span class="chip est">${pct(c.estPct)} estimado</span>` : ''}
+      ${verCostos() && c.margen != null && o.estado !== 'cotizada' ? `<span class="chip ${c.margen < 0 ? 'bad' : 'ok'}">Margen ${clp(c.margen)}</span>` : ''}
+      ${verCostos() && c.proyKg ? `<span class="chip ${c.pptoKg && c.proyKg > c.pptoKg ? 'bad' : ''}">${clp(c.proyKg)}/kg proyectado</span>` : ''}</div>
   </button>`;
 }
 function vOTDetalle() {
   const o = otOf(S.ui.otId); if (!o) { S.tab = 'ots'; return vOTs(); }
-  const c = costOT(o), adm = isAdmin();
+  const c = costOT(o), adm = verCostos();
   const porOp = {}, porPer = {};
   c.hh.forEach(r => { const h = closed(r) ? +r.horas : elapsedH(r.inicio); const k = opOf(r.operacion_id)?.nombre || 'Sin operación'; porOp[k] = (porOp[k] || 0) + h; const n = perfil(r.perfil_id)?.nombre || '—'; porPer[n] = (porPer[n] || 0) + h; });
   const maxOp = Math.max(1, ...Object.values(porOp));
@@ -986,10 +1009,10 @@ function vOTDetalle() {
       <details><summary class="small">Por persona</summary><div class="kv small" style="margin-top:8px">${Object.entries(porPer).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)}</span><span class="v">${hrs(v)}</span>`).join('')}</div></details></div>
     <div class="card"><div class="row between"><h3>Materiales</h3><span class="muted small">${c.kgMat ? kg(c.kgMat) : ''}${adm ? `${c.kgMat ? ' · ' : ''}${clp(c.mat)}` : ''}</span></div>
       ${c.cons.length ? `<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="n">Cant.</th><th class="n">Kg</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.cons.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}${x.origen === 'compra_directa' ? ' <span class="chip">compra directa</span>' : x.origen === 'stock_ot' ? ' <span class="chip acc">stock OT</span>' : ''}</td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td>
-        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td><button class="btn ghost" data-act="costo-edit" data-t="consumos" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin consumos.</div>'}</div>
+        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td>${isAdmin() ? `<button class="btn ghost" data-act="costo-edit" data-t="consumos" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin consumos.</div>'}</div>
     <div class="card"><div class="row between"><h3>Pintura, tratamiento térmico y servicios</h3>${adm ? `<span class="muted small">${clp(c.serv)}</span>` : ''}</div>
       ${c.servL.length ? `<div class="tbl-wrap"><table><thead><tr><th>Servicio</th><th class="n">Cant.</th>${adm ? '<th class="n">Total</th><th></th>' : ''}</tr></thead><tbody>${c.servL.map(x => `<tr><td style="white-space:normal">${esc(x.descripcion)}<div class="tiny muted">${TIPOS_SERV[x.tipo]} · ${x.proveedor ? esc(x.proveedor) : 'propio'}</div></td><td class="n">${num(x.cantidad, 2)} ${esc(x.unidad || '')}</td>
-        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td><button class="btn ghost" data-act="costo-edit" data-t="servicios" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin servicios.</div>'}
+        ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td>${isAdmin() ? `<button class="btn ghost" data-act="costo-edit" data-t="servicios" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin servicios.</div>'}
       <button class="btn ghost" data-act="serv-new" data-ot="${o.id}">+ Registrar servicio</button></div>
   </div>`;
 }
@@ -1083,7 +1106,7 @@ function vBodega() {
   const mats = S.d.materiales.filter(m => m.activo);
   const opt = m => `<option value="${m.id}">${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} — ${num(m.stock, 2)} ${esc(m.unidad)}</option>`;
   const matOptions = conGrupo => grupos().map(g => { const gi = grupoInfo(g);
-      return `<optgroup label="${esc(g)}">${conGrupo ? `<option value="g:${esc(g)}">${esc(g)} · cualquier tamaño — ${num(gi.stock, 2)} ${esc(gi.unidad)}${gi.cpp != null && (isAdmin() || role() === 'bodega') ? ` · promedio ${clp(gi.cpp)}` : ''}</option>` : ''}${mats.filter(m => m.grupo === g).map(opt).join('')}</optgroup>`; }).join('')
+      return `<optgroup label="${esc(g)}">${conGrupo ? `<option value="g:${esc(g)}">${esc(g)} · cualquier tamaño — ${num(gi.stock, 2)} ${esc(gi.unidad)}${gi.cpp != null && (verCostos() || role() === 'bodega') ? ` · promedio ${clp(gi.cpp)}` : ''}</option>` : ''}${mats.filter(m => m.grupo === g).map(opt).join('')}</optgroup>`; }).join('')
     + (mats.some(m => !m.grupo) ? `<optgroup label="Sin grupo">${mats.filter(m => !m.grupo).map(opt).join('')}</optgroup>` : '');
   let body = '';
   if (t === 'stockot') body = vStockOT();
@@ -1117,7 +1140,7 @@ function vBodega() {
       <div class="card"><div class="row between"><h2>Últimos ingresos</h2><span class="small muted">${kg(sum(S.d.stock_ingresos.filter(x => x.fecha >= hoy().slice(0, 8) + '01'), x => x.kg))} este mes</span></div><div class="list">${rec.map(x => { const m = byId(S.d.materiales, x.material_id); return `<div class="item"><div class="t">${esc(m?.nombre)}<div class="small muted">${fechaTxt(x.fecha)}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div><div style="text-align:right"><strong>${num(x.cantidad, 2)} ${esc(m?.unidad)}</strong>${x.kg != null && String(m?.unidad).toLowerCase() !== 'kg' ? `<div class="tiny muted">${kg(x.kg)}</div>` : ''}${x.kg == null ? '<div><span class="chip warn">sin kg</span></div>' : ''}</div></div>`; }).join('') || '<div class="empty">Sin ingresos recientes.</div>'}</div>
       ${isAdmin() ? '<button class="btn ghost" data-act="aj-tab-go" data-k="materiales">Agregar material nuevo al catálogo</button>' : '<p class="small muted">¿El material no está en la lista? Pídele a administración que lo agregue.</p>'}</div></div>`;
   } else {
-    const verCosto = isAdmin() || role() === 'bodega';
+    const verCosto = verCostos() || role() === 'bodega';
     const fila = m => `<tr><td>${esc(m.codigo || '')}</td><td style="white-space:normal;${m.grupo ? 'padding-left:22px' : ''}">${esc(m.nombre)}</td><td class="n">${num(m.stock, 2)} ${esc(m.unidad)}</td>
       <td class="n">${kgMov(m, m.stock) != null ? num(kgMov(m, m.stock), 0) : '<span class="muted" title="Sin peso por unidad (Ajustes › Materiales). Los consumibles como gas o discos pueden quedar sin peso.">—</span>'}</td><td class="n">${num(m.stock_min, 2)}</td>
       ${verCosto ? `<td class="n">${m.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(m.costo_unit)}${m.costo_estimado ? ' <span class="chip est">est.</span>' : ''}</td><td class="n">${m.costo_unit != null ? clp(Math.max(0, m.stock) * m.costo_unit) : ''}</td>` : ''}
@@ -1130,7 +1153,7 @@ function vBodega() {
       ${act.filter(m => !m.grupo).length ? `<tr style="background:var(--surface2)"><td></td><td colspan="${verCosto ? 7 : 5}"><strong>Sin grupo</strong></td></tr>${act.filter(m => !m.grupo).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(fila).join('')}` : ''}
       </tbody></table></div>
       <p class="small muted">Costo promedio ponderado: se recalcula con cada ingreso. En la fila del grupo, el promedio del grupo según el stock de cada tamaño.</p>
-      ${isAdmin() ? '<button class="btn" data-act="csv-stock">Exportar stock</button>' : ''}</div>`;
+      ${verCostos() ? '<button class="btn" data-act="csv-stock">Exportar stock</button>' : ''}</div>`;
   }
   const stockKg = sum(S.d.materiales.filter(m => m.activo), m => kgMov(m, Math.max(0, +m.stock)));
   return `<div class="row between"><h1>Bodega</h1><span class="chip">${kg(stockKg)} de acero y consumibles en bodega</span></div>${tabsH}${body}`;
@@ -1144,7 +1167,7 @@ function resumenStockOT(otId) {
     kgSaldo: sum(ls, l => kgLinea(l, saldoLinea(l))), conSaldo: ls.filter(l => saldoLinea(l) > 0).length, sinPrecio: ls.filter(l => l.costo_unit == null).length};
 }
 function vStockOT() {
-  const verP = isAdmin() || role() === 'bodega';
+  const verP = verCostos() || role() === 'bodega';
   const otsCon = S.d.ots.filter(o => S.d.ot_stock.some(l => l.ot_id === o.id));
   if (!otsCon.some(o => o.id === S.ui.stockOt)) S.ui.stockOt = otsCon[0]?.id ?? null;
   const o = otOf(S.ui.stockOt);
@@ -1246,7 +1269,7 @@ function sheetTraspaso(id) {
     <button class="btn pri">Confirmar</button></form>`);
 }
 function sheetLinea(id) {
-  const l = byId(S.d.ot_stock, id), verP = isAdmin() || role() === 'bodega';
+  const l = byId(S.d.ot_stock, id), verP = verCostos() || role() === 'bodega';
   openModal('Editar línea', `<form data-form="linea"><input type="hidden" name="id" value="${id}">
     <label class="f"><span>Descripción</span><input type="text" name="desc" id="li-d" value="${esc(l.descripcion)}" required></label>
     <div class="fgrid">${verP ? `<label class="f"><span>Precio neto por ${esc(l.unidad)} $</span><input type="number" name="cu" id="li-cu" step="any" min="0" value="${l.costo_unit ?? ''}"></label>` : ''}
@@ -1289,7 +1312,7 @@ async function verDoc(id) {
 }
 function vDocsOT(o) {
   const compras = S.d.compras.filter(c => c.ot_id === o.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const sueltos = docsDe(o.id).filter(d => !d.compra_id), adm = isAdmin();
+  const sueltos = docsDe(o.id).filter(d => !d.compra_id), adm = verCostos();
   return `<div class="card"><div class="row between"><h3>Compras y documentos</h3><div class="row"><button class="btn" data-act="doc-new" data-ot="${o.id}">+ Subir documento</button><button class="btn" data-act="compra-new" data-ot="${o.id}">+ Nueva compra</button></div></div>
     ${compras.length ? `<div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Documento</th><th>Proveedor</th><th class="n">Líneas</th>${adm ? '<th class="n">Total</th>' : ''}<th>Estado</th><th>Archivo</th></tr></thead><tbody>
       ${compras.map(c => { const ds = docsDe(o.id, c.id), nl = S.d.ot_stock.filter(l => l.compra_id === c.id).length;
@@ -1465,8 +1488,12 @@ function sheetCat(k, id) {
       : `<label class="f"><span>${l}</span><input type="${ty === 'num' ? 'number' : ty}" ${ty === 'num' ? 'step="any"' : ''} name="${f}" id="c-${f}" value="${esc(r[f] ?? '')}" ${['nombre', 'fecha', 'unidad'].includes(f) ? 'required' : ''}></label>`).join('')}
     ${nuevoTrab ? `<div class="fgrid"><label class="f"><span>Usuario para entrar</span><input type="text" name="usuario" id="c-usuario" required autocapitalize="off" placeholder="jperez"></label>
       <label class="f"><span>Clave inicial (mínimo 6)</span><input type="text" name="clave" id="c-clave" minlength="6" required></label></div>
-      <p class="small muted">Entrega el usuario y la clave al trabajador. Para cambiar una clave después, se hace desde Supabase (Authentication › Users).</p>` : ''}
-    <div class="row"><button class="btn pri">Guardar</button>${id != null && k !== 'trabajadores' ? `<button type="button" class="btn danger" data-act="cat-del" data-k="${k}" data-id="${esc(id)}">Eliminar</button>` : ''}</div></form>`);
+      <p class="small muted">Entrega el usuario y la clave al trabajador. Después puedes cambiarla abriendo su ficha en Ajustes › Trabajadores.</p>` : ''}
+    ${k === 'trabajadores' && id != null && isAdmin() ? `<div class="card" style="margin:12px 0"><div class="label">Cambiar clave de ${esc(r.usuario || '')}</div>
+      <div class="row" style="align-items:end"><label class="f" style="flex:1"><span>Clave nueva (mínimo 6)</span><input type="text" id="c-clave-nueva" autocomplete="off" autocapitalize="off" minlength="6"></label>
+      <button type="button" class="btn" data-act="clave-set" data-id="${esc(id)}">Cambiar clave</button></div>
+      <p class="tiny muted">Solo el administrador puede hacerlo. Entrégale la clave nueva al trabajador.</p></div>` : ''}
+    <div class="row"><button class="btn pri">Guardar</button>${id != null && k !== 'trabajadores' ? `<button type="button" class="btn danger" data-act="cat-del" data-k="${k}" data-id="${esc(id)}">Eliminar</button>` : ''}${id != null && k === 'trabajadores' && isAdmin() && id !== S.me.id ? `<button type="button" class="btn danger" data-act="usr-del" data-id="${esc(id)}">Eliminar trabajador</button>` : ''}</div></form>`);
 }
 
 /* ---------------- costo pendiente */
@@ -1551,6 +1578,19 @@ const ACT = {
   'doc-new': el => sheetDoc(+el.dataset.ot, +el.dataset.compra || null),
   'doc-ver': el => verDoc(+el.dataset.id),
   'doc-del': el => openModal('Eliminar documento', `<p>¿Eliminar este documento? El archivo se borra y no se puede recuperar.</p><div class="row"><button class="btn danger" data-act="doc-del-ok" data-id="${el.dataset.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`),
+  'usr-del': el => { const p = byId(S.d.perfiles, el.dataset.id); if (!p) return;
+    openModal('Eliminar trabajador', `<form data-form="usr-del"><input type="hidden" name="id" value="${esc(p.id)}">
+      <p>Vas a eliminar a <strong>${esc(p.nombre)}</strong> (${esc(p.usuario || '')}). Ya no podrá entrar a la app. No se puede deshacer.</p>
+      <p class="small muted">Si tiene horas o registros en la app, no se podrá eliminar para no perder los costos de las OT; en ese caso desmárcalo como Activo.</p>
+      <label class="f"><span>Para confirmar, escribe TU clave de administrador</span><input type="password" name="clave" id="ud-clave" autocomplete="current-password" required></label>
+      <div class="row"><button class="btn danger">Eliminar definitivamente</button><button type="button" class="btn" data-act="close">Cancelar</button></div></form>`); },
+  'clave-set': el => {
+    const clave = (document.getElementById('c-clave-nueva')?.value || '').trim();
+    if (clave.length < 6) return toast('La clave debe tener al menos 6 caracteres');
+    if (!isAdmin()) return toast('Solo el administrador puede cambiar claves');
+    const p = byId(S.d.perfiles, el.dataset.id);
+    return run(() => DB.cambiarClave(el.dataset.id, clave), `Clave de ${p?.usuario || 'usuario'} cambiada`);
+  },
   'doc-del-ok': el => { const d = byId(S.d.documentos, +el.dataset.id); run(async () => { await DB.del('documentos', d.id); await DB.borrarArchivo(d.path).catch(() => {}); }, 'Documento eliminado'); },
   'stockot-ot': el => { S.ui.stockOt = +el.dataset.id; render(); },
   'go-stockot': el => { S.ui.stockOt = +el.dataset.id; S.ui.bodTab = 'stockot'; S.tab = 'bodega'; render(); window.scrollTo(0, 0); },
@@ -1746,6 +1786,11 @@ const FORMS = {
     return run(() => DB.upd('ot_stock', id, row), 'Línea actualizada');
   },
   costo(fd) { const t = fd.get('t'), id = +fd.get('id'); return run(() => DB.upd(t, id, {costo_unit: +fd.get('cu'), estado_costo: fd.get('est') ? 'estimado' : 'real', doc_ref: fd.get('doc') || null}), 'Costo actualizado'); },
+  'usr-del'(fd) {
+    if (!isAdmin()) return toast('Solo el administrador puede eliminar trabajadores');
+    const p = byId(S.d.perfiles, fd.get('id'));
+    return run(() => DB.eliminarUsuario(fd.get('id'), fd.get('clave')), `Trabajador ${p?.usuario || ''} eliminado`);
+  },
   param(fd) { return run(async () => { for (const k of ['gg_pct', 'jornada_horas', 'colacion_min']) await DB.upsert('config', {clave: k, valor: +fd.get(k)}); }, 'Parámetros guardados'); },
   async cat(fd) {
     const k = fd.get('_k'), c = CAT[k], id = fd.get('_id');

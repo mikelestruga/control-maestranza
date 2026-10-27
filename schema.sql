@@ -29,7 +29,7 @@ create table perfiles (
   id uuid primary key references auth.users(id) on delete cascade,
   nombre text not null,
   usuario text,
-  rol text not null default 'operario' check (rol in ('operario','bodega','jefe','admin')),
+  rol text not null default 'operario' check (rol in ('operario','bodega','jefe','gerencia','admin')),
   tarifa_id bigint references tarifas(id),
   activo boolean not null default false
 );
@@ -436,7 +436,8 @@ create trigger ingreso_stock after insert on stock_ingresos
 
 -- ---------- Permisos por rol (RLS) -----------------------------------
 -- operario: registra sus horas · bodega: consumos y stock
--- jefe: valida horas, OT y servicios · admin: todo, incluidos costos
+-- jefe: valida horas, OT y servicios · gerencia: lo mismo y además ve todos los costos (solo lectura)
+-- admin: todo, incluidos costos, ajustes de la plataforma y cambio de claves
 
 alter table config          enable row level security;
 alter table tarifas         enable row level security;
@@ -471,50 +472,52 @@ create policy admin_oper    on operaciones for all to authenticated using (mi_ro
 create policy admin_maq     on maquinas    for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
 create policy admin_dias    on dias_especiales for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
 create policy admin_ppto    on ot_ppto     for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
-create policy admin_costo   on hh_costo    for select to authenticated using (mi_rol() = 'admin');
+create policy admin_costo   on hh_costo    for select to authenticated using (mi_rol() in ('admin','gerencia'));
+create policy ger_tarifas   on tarifas     for select to authenticated using (mi_rol() = 'gerencia');
+create policy ger_ppto      on ot_ppto     for select to authenticated using (mi_rol() = 'gerencia');
 
 -- Catálogos de bodega y servicios
-create policy leer_mat   on materiales for select to authenticated using (mi_rol() in ('bodega','jefe','admin'));
+create policy leer_mat   on materiales for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy admin_mat  on materiales for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
-create policy leer_proc  on procesos   for select to authenticated using (mi_rol() in ('jefe','admin'));
+create policy leer_proc  on procesos   for select to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
 create policy admin_proc on procesos   for all to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
 
 -- OT: jefe y admin crean y editan
-create policy jefe_ots_ins on ots for insert to authenticated with check (mi_rol() in ('jefe','admin'));
-create policy jefe_ots_upd on ots for update to authenticated using (mi_rol() in ('jefe','admin')) with check (mi_rol() in ('jefe','admin'));
+create policy jefe_ots_ins on ots for insert to authenticated with check (mi_rol() in ('jefe','gerencia','admin'));
+create policy jefe_ots_upd on ots for update to authenticated using (mi_rol() in ('jefe','gerencia','admin')) with check (mi_rol() in ('jefe','gerencia','admin'));
 create policy admin_ots_del on ots for delete to authenticated using (mi_rol() = 'admin');
 
 -- Horas: cada uno ve y registra las suyas; jefe y admin ven y corrigen todas
 create policy hh_leer on hh_registros for select to authenticated
-  using (perfil_id = auth.uid() or mi_rol() in ('jefe','admin'));
+  using (perfil_id = auth.uid() or mi_rol() in ('jefe','gerencia','admin'));
 create policy hh_crear on hh_registros for insert to authenticated
-  with check ((perfil_id = auth.uid() and estado = 'pendiente' and mi_rol() is not null) or mi_rol() in ('jefe','admin'));
+  with check ((perfil_id = auth.uid() and estado = 'pendiente' and mi_rol() is not null) or mi_rol() in ('jefe','gerencia','admin'));
 create policy hh_editar on hh_registros for update to authenticated
-  using ((perfil_id = auth.uid() and fin is null and estado = 'pendiente') or mi_rol() in ('jefe','admin'))
-  with check ((perfil_id = auth.uid() and estado = 'pendiente') or mi_rol() in ('jefe','admin'));
-create policy hh_borrar on hh_registros for delete to authenticated using (mi_rol() in ('jefe','admin'));
+  using ((perfil_id = auth.uid() and fin is null and estado = 'pendiente') or mi_rol() in ('jefe','gerencia','admin'))
+  with check ((perfil_id = auth.uid() and estado = 'pendiente') or mi_rol() in ('jefe','gerencia','admin'));
+create policy hh_borrar on hh_registros for delete to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
 
 create policy asis_leer on asistencia for select to authenticated
-  using (perfil_id = auth.uid() or mi_rol() in ('jefe','admin'));
+  using (perfil_id = auth.uid() or mi_rol() in ('jefe','gerencia','admin'));
 create policy asis_crear on asistencia for insert to authenticated
-  with check ((perfil_id = auth.uid() and mi_rol() is not null) or mi_rol() in ('jefe','admin'));
+  with check ((perfil_id = auth.uid() and mi_rol() is not null) or mi_rol() in ('jefe','gerencia','admin'));
 create policy asis_editar on asistencia for update to authenticated
-  using (perfil_id = auth.uid() or mi_rol() in ('jefe','admin'))
-  with check (perfil_id = auth.uid() or mi_rol() in ('jefe','admin'));
+  using (perfil_id = auth.uid() or mi_rol() in ('jefe','gerencia','admin'))
+  with check (perfil_id = auth.uid() or mi_rol() in ('jefe','gerencia','admin'));
 create policy asis_borrar on asistencia for delete to authenticated using (mi_rol() = 'admin');
 
 -- Consumos y servicios
-create policy cons_leer on consumos for select to authenticated using (mi_rol() in ('bodega','jefe','admin'));
-create policy cons_crear on consumos for insert to authenticated with check (mi_rol() in ('bodega','jefe','admin'));
+create policy cons_leer on consumos for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy cons_crear on consumos for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy cons_admin_upd on consumos for update to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
 create policy cons_admin_del on consumos for delete to authenticated using (mi_rol() = 'admin');
 
-create policy serv_leer on servicios for select to authenticated using (mi_rol() in ('jefe','admin'));
-create policy serv_crear on servicios for insert to authenticated with check (mi_rol() in ('jefe','admin'));
+create policy serv_leer on servicios for select to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
+create policy serv_crear on servicios for insert to authenticated with check (mi_rol() in ('jefe','gerencia','admin'));
 create policy serv_admin_upd on servicios for update to authenticated using (mi_rol() = 'admin') with check (mi_rol() = 'admin');
 create policy serv_admin_del on servicios for delete to authenticated using (mi_rol() = 'admin');
 
-create policy ing_leer on stock_ingresos for select to authenticated using (mi_rol() in ('bodega','jefe','admin'));
+create policy ing_leer on stock_ingresos for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy ing_crear on stock_ingresos for insert to authenticated with check (mi_rol() in ('bodega','admin'));
 
 -- Vista de horas con su costo. Respeta los permisos de quien consulta:
@@ -565,10 +568,10 @@ drop policy if exists prod_leer on produccion;
 drop policy if exists prod_crear on produccion;
 drop policy if exists prod_editar on produccion;
 drop policy if exists prod_borrar on produccion;
-create policy prod_leer   on produccion for select to authenticated using (mi_rol() in ('jefe','admin'));
-create policy prod_crear  on produccion for insert to authenticated with check (mi_rol() in ('jefe','admin'));
-create policy prod_editar on produccion for update to authenticated using (mi_rol() in ('jefe','admin')) with check (mi_rol() in ('jefe','admin'));
-create policy prod_borrar on produccion for delete to authenticated using (mi_rol() in ('jefe','admin'));
+create policy prod_leer   on produccion for select to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
+create policy prod_crear  on produccion for insert to authenticated with check (mi_rol() in ('jefe','gerencia','admin'));
+create policy prod_editar on produccion for update to authenticated using (mi_rol() in ('jefe','gerencia','admin')) with check (mi_rol() in ('jefe','gerencia','admin'));
+create policy prod_borrar on produccion for delete to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
 
 grant all on produccion to authenticated;
 
@@ -674,7 +677,7 @@ create or replace function traspasar_a_bodega(p_linea bigint, p_material bigint,
 returns void language plpgsql security definer set search_path = public as $$
 declare l ot_stock%rowtype; o text;
 begin
-  if mi_rol() not in ('bodega','jefe','admin') then raise exception 'Sin permiso'; end if;
+  if mi_rol() not in ('bodega','jefe','gerencia','admin') then raise exception 'Sin permiso'; end if;
   select * into l from ot_stock where id = p_linea;
   if p_cantidad <= 0 or p_cantidad > ot_stock_saldo(p_linea) + 0.0001 then raise exception 'Cantidad mayor al saldo'; end if;
   select numero into o from ots where id = l.ot_id;
@@ -694,13 +697,13 @@ drop policy if exists compras_leer on compras;   drop policy if exists compras_c
 drop policy if exists compras_editar on compras; drop policy if exists compras_borrar on compras;
 drop policy if exists ots_leer on ot_stock;      drop policy if exists ots_crear on ot_stock;
 drop policy if exists ots_editar on ot_stock;    drop policy if exists ots_borrar on ot_stock;
-create policy compras_leer   on compras for select to authenticated using (mi_rol() in ('bodega','jefe','admin'));
-create policy compras_crear  on compras for insert to authenticated with check (mi_rol() in ('bodega','jefe','admin'));
-create policy compras_editar on compras for update to authenticated using (mi_rol() in ('bodega','jefe','admin')) with check (mi_rol() in ('bodega','jefe','admin'));
+create policy compras_leer   on compras for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy compras_crear  on compras for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy compras_editar on compras for update to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin')) with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy compras_borrar on compras for delete to authenticated using (mi_rol() = 'admin');
-create policy ots_leer   on ot_stock for select to authenticated using (mi_rol() in ('bodega','jefe','admin'));
-create policy ots_crear  on ot_stock for insert to authenticated with check (mi_rol() in ('bodega','jefe','admin'));
-create policy ots_editar on ot_stock for update to authenticated using (mi_rol() in ('bodega','jefe','admin')) with check (mi_rol() in ('bodega','jefe','admin'));
+create policy ots_leer   on ot_stock for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy ots_crear  on ot_stock for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy ots_editar on ot_stock for update to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin')) with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy ots_borrar on ot_stock for delete to authenticated using (mi_rol() = 'admin');
 grant all on compras, ot_stock to authenticated;
 
@@ -745,9 +748,9 @@ create index if not exists documentos_compra on documentos (compra_id);
 alter table documentos enable row level security;
 drop policy if exists docs_leer on documentos;  drop policy if exists docs_crear on documentos;
 drop policy if exists docs_editar on documentos; drop policy if exists docs_borrar on documentos;
-create policy docs_leer   on documentos for select to authenticated using (mi_rol() in ('bodega','jefe','admin'));
-create policy docs_crear  on documentos for insert to authenticated with check (mi_rol() in ('bodega','jefe','admin'));
-create policy docs_editar on documentos for update to authenticated using (mi_rol() in ('bodega','jefe','admin')) with check (mi_rol() in ('bodega','jefe','admin'));
+create policy docs_leer   on documentos for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy docs_crear  on documentos for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy docs_editar on documentos for update to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin')) with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy docs_borrar on documentos for delete to authenticated using (mi_rol() = 'admin');
 grant all on documentos to authenticated;
 
@@ -758,9 +761,9 @@ drop policy if exists "documentos leer"   on storage.objects;
 drop policy if exists "documentos subir"  on storage.objects;
 drop policy if exists "documentos borrar" on storage.objects;
 create policy "documentos leer" on storage.objects for select to authenticated
-  using (bucket_id = 'documentos' and public.mi_rol() in ('bodega','jefe','admin'));
+  using (bucket_id = 'documentos' and public.mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy "documentos subir" on storage.objects for insert to authenticated
-  with check (bucket_id = 'documentos' and public.mi_rol() in ('bodega','jefe','admin'));
+  with check (bucket_id = 'documentos' and public.mi_rol() in ('bodega','jefe','gerencia','admin'));
 create policy "documentos borrar" on storage.objects for delete to authenticated
   using (bucket_id = 'documentos' and public.mi_rol() = 'admin');
 

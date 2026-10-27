@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     const { data: u, error: eu } = await svc.auth.getUser(jwt);
     if (eu || !u?.user) return out({ error: "no_autenticado" }, 401);
     const { data: p } = await svc.from("perfiles").select("rol, activo").eq("id", u.user.id).maybeSingle();
-    if (!p || !p.activo || !["bodega", "jefe", "admin"].includes(p.rol)) return out({ error: "sin_permiso" }, 403);
+    if (!p || !p.activo || !["bodega", "jefe", "gerencia", "admin"].includes(p.rol)) return out({ error: "sin_permiso" }, 403);
 
     // 2) Archivo (base64)
     const { archivo, tipo } = await req.json();
