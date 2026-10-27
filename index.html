@@ -140,6 +140,8 @@ tr.click{cursor:pointer} tr.click:hover td{background:var(--surface2)}
 form{display:grid;gap:12px}
 .f{display:grid;gap:4px;min-width:0}
 .f>span{font-size:.8rem;font-weight:600;color:var(--muted)}
+input[type=file]{width:100%;max-width:100%;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-height:44px;font-size:.95rem}
+.grid-gap{display:grid;gap:12px}
 input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],input[type=search],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-height:44px}
 textarea{min-height:70px;resize:vertical}
 .fgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
@@ -1674,7 +1676,7 @@ const ACT = {
   'go-stock': () => { S.ui.bodTab = 'stock'; S.tab = 'bodega'; render(); },
   'ot-filtro': el => { S.ui.otFiltro = el.dataset.k; render(); },
   'ot-new': () => { S.ui.otDoc = null; sheetOT(); },
-  'ot-ia': () => { S.ui.otDoc = null; openModal('Agregar OT con documento', `<div class="stack"><p class="small muted">Sube la OT, la cotización o la orden de compra del cliente (PDF o foto). La IA llena el formulario y el documento queda guardado dentro de la OT. Tú revisas los datos antes de crear la OT.</p>
+  'ot-ia': () => { S.ui.otDoc = null; openModal('Agregar OT con documento', `<div class="grid-gap"><p class="small muted">Sube la OT, la cotización o la orden de compra del cliente (PDF o foto). La IA llena el formulario y el documento queda guardado dentro de la OT. Tú revisas los datos antes de crear la OT.</p>
       <label class="f"><span>Documento (PDF o foto; máximo 15 MB)</span><input type="file" id="oi-file" accept="application/pdf,image/*"></label>
       <button type="button" class="btn pri xl" data-act="ot-ia-leer">Leer con IA</button><p class="small muted" id="oi-msg"></p></div>`); },
   'ot-ia-leer': async el => {
