@@ -791,6 +791,47 @@ create policy "documentos subir" on storage.objects for insert to authenticated
 create policy "documentos borrar" on storage.objects for delete to authenticated
   using (bucket_id = 'documentos' and public.mi_rol() in ('admin','gerencia'));
 
+-- ---------- Horas de máquina por OT (independientes de las horas del operador) ----
+-- El operador se cobra con su tarifa HH; la máquina con su costo por hora. Aquí se anota
+-- el tiempo de máquina que no está en una tarea de operario. El costo lo ve solo admin/gerencia.
+create table if not exists maquina_uso (
+  id bigint generated always as identity primary key,
+  ot_id bigint not null references ots(id) on delete cascade,
+  maquina_id bigint not null references maquinas(id),
+  fecha date not null default current_date,
+  horas numeric not null check (horas > 0 and horas <= 24),
+  nota text,
+  registrado_por uuid default auth.uid(),
+  creado timestamptz not null default now()
+);
+create index if not exists maquina_uso_ot on maquina_uso (ot_id);
+create table if not exists maquina_uso_costo (
+  uso_id bigint primary key references maquina_uso(id) on delete cascade,
+  costo numeric not null default 0,
+  estimado boolean not null default false
+);
+create or replace function maquina_uso_calcula() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare m maquinas%rowtype;
+begin
+  select * into m from maquinas where id = new.maquina_id;
+  insert into maquina_uso_costo (uso_id, costo, estimado)
+  values (new.id, round(new.horas * coalesce(m.costo_hh, 0)), coalesce(m.estimada, false))
+  on conflict (uso_id) do update set costo = excluded.costo, estimado = excluded.estimado;
+  return null;
+end $$;
+drop trigger if exists maquina_uso_costo_trg on maquina_uso;
+create trigger maquina_uso_costo_trg after insert or update on maquina_uso for each row execute function maquina_uso_calcula();
+alter table maquina_uso enable row level security;
+alter table maquina_uso_costo enable row level security;
+drop policy if exists mu_leer on maquina_uso; drop policy if exists mu_esc on maquina_uso; drop policy if exists mu_costo on maquina_uso_costo;
+create policy mu_leer on maquina_uso for select to authenticated using (mi_rol() in ('jefe','gerencia','admin'));
+create policy mu_esc  on maquina_uso for all to authenticated using (mi_rol() in ('jefe','gerencia','admin')) with check (mi_rol() in ('jefe','gerencia','admin'));
+create policy mu_costo on maquina_uso_costo for select to authenticated using (mi_rol() in ('admin','gerencia'));
+revoke all on maquina_uso, maquina_uso_costo from anon, authenticated;
+grant select, insert, update, delete on maquina_uso to authenticated;
+grant select on maquina_uso_costo to authenticated;
+
 -- ---------- Registro de cambios (auditoría) --------------------------
 -- Cada alta, cambio o eliminación que hace un usuario queda anotada con quién, cuándo y qué.
 -- Solo el administrador puede leerla; nadie puede modificarla ni borrarla desde la app.
@@ -838,6 +879,7 @@ begin
   elsif t = 'ot_stock' then x := coalesce(r->>'descripcion','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'compras' then x := coalesce(r->>'numero','s/n') || ' · ' || coalesce(r->>'proveedor','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'documentos' then x := coalesce(r->>'nombre','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+  elsif t = 'maquina_uso' then x := coalesce((select nombre from maquinas where id = (r->>'maquina_id')::bigint), '?') || ' · ' || coalesce(r->>'horas','') || ' h · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'produccion' then x := 'OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?') || ' · ' || coalesce(r->>'kg','') || ' kg';
   else x := r->>'id';
   end if;
@@ -877,6 +919,7 @@ begin
     when 'consumos' then 'Bodega' when 'stock_ingresos' then 'Bodega' when 'ot_stock' then 'Bodega'
     when 'compras' then 'Compras y documentos' when 'documentos' then 'Compras y documentos'
     when 'servicios' then 'Pintura y servicios'
+    when 'maquina_uso' then 'Máquinas'
     when 'tarifas' then 'Costos y tarifas' when 'maquinas' then 'Costos y tarifas' when 'procesos' then 'Costos y tarifas'
     when 'perfiles' then 'Trabajadores'
     else 'Plataforma' end;
@@ -892,7 +935,7 @@ begin
 end $$;
 
 do $$ declare x record; begin
-  for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('hh_registros','cambios'),('asistencia','cambios'),
+  for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('maquina_uso','todo'),('hh_registros','cambios'),('asistencia','cambios'),
       ('materiales','todo'),('consumos','cambios'),('stock_ingresos','todo'),('ot_stock','cambios'),('compras','todo'),('documentos','todo'),
       ('servicios','cambios'),('tarifas','todo'),('maquinas','todo'),('procesos','todo'),('perfiles','cambios'),('config','todo'),
       ('operaciones','todo'),('dias_especiales','todo')) as v(t, m)

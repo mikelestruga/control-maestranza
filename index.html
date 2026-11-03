@@ -234,7 +234,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -274,17 +274,17 @@ const pesoTxt = b => !b ? '' : b > 1048576 ? num(b / 1048576, 1) + ' MB' : num(b
 const AUD = {
   seccion: {ots: 'Órdenes de trabajo', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
     materiales: 'Materiales', consumos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', documentos: 'Compras y documentos',
-    servicios: 'Pintura y servicios', tarifas: 'Costos y tarifas', maquinas: 'Costos y tarifas', procesos: 'Costos y tarifas', perfiles: 'Trabajadores'},
+    servicios: 'Pintura y servicios', maquina_uso: 'Máquinas', tarifas: 'Costos y tarifas', maquinas: 'Costos y tarifas', procesos: 'Costos y tarifas', perfiles: 'Trabajadores'},
   modo: {ots: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
-    compras: 'todo', documentos: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
+    compras: 'todo', documentos: 'todo', maquina_uso: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
   nombre: {ots: 'OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
-    stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', documentos: 'documento', servicios: 'servicio', tarifas: 'tarifa HH', maquinas: 'máquina',
+    stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', documentos: 'documento', servicios: 'servicio', maquina_uso: 'horas de máquina', tarifas: 'tarifa HH', maquinas: 'máquina',
     procesos: 'proceso propio', perfiles: 'trabajador', config: 'parámetro', operaciones: 'operación', dias_especiales: 'feriado'},
-  agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock'],
+  agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock', 'maquina_uso'],
   col: {costo_unit: 'Costo unitario', costo_hh: 'Costo hora', costo_hh_extra: 'Costo hora extra', precio_venta: 'Precio de venta', ppto_hh: 'Mano de obra cotizada', ppto_material: 'Materiales cotizados',
     ppto_servicios: 'Servicios cotizados', ppto_maquina: 'Máquinas cotizadas', stock: 'Stock', stock_min: 'Stock mínimo', nombre: 'Nombre', rol: 'Rol', activo: 'Activo', activa: 'Activa',
     estado: 'Estado', cantidad: 'Cantidad', kg: 'Kg', kg_unidad: 'Kg por unidad', cliente: 'Cliente', numero: 'Número', descripcion: 'Descripción', unidad: 'Unidad', grupo: 'Grupo',
-    horas: 'Horas', horas_extra: 'Horas extra', estimada: 'Estimado', sueldo_mes: 'Sueldo del mes', horas_mes: 'Horas del mes', mult_extra: 'Multiplicador hora extra', costo_estimado: 'Costo estimado', estado_costo: 'Tipo de costo', proveedor: 'Proveedor', fecha: 'Fecha', tipo: 'Tipo',
+    horas: 'Horas', horas_extra: 'Horas extra', estimada: 'Estimado', sueldo_mes: 'Sueldo del mes', horas_mes: 'Horas del mes', maquina_id: 'Máquina', mult_extra: 'Multiplicador hora extra', costo_estimado: 'Costo estimado', estado_costo: 'Tipo de costo', proveedor: 'Proveedor', fecha: 'Fecha', tipo: 'Tipo',
     codigo: 'Código', usuario: 'Usuario', tarifa_id: 'Tarifa', valor: 'Valor', clave: 'Parámetro', neto: 'Neto', terminadas: 'Terminadas', kg_cotizados: 'Kg cotizados', kg_producidos: 'Kg producidos',
     fecha_entrega: 'Entrega', ppto_horas: 'HH cotizadas', ot_id: 'OT', doc_ref: 'Documento', nota: 'Nota', inicio: 'Inicio', fin: 'Término', piezas: 'Piezas'}
 };
@@ -305,6 +305,7 @@ function audDet(t, r) {
     case 'compras': return `${r.numero || 's/n'} · ${r.proveedor || ''} · OT ${o(r.ot_id)}`;
     case 'documentos': return `${r.nombre} · OT ${o(r.ot_id)}`;
     case 'produccion': return `OT ${o(r.ot_id)} · ${r.kg} kg`;
+    case 'maquina_uso': return `${T_.maquinas.find(x => x.id === r.maquina_id)?.nombre || '?'} · ${r.horas} h · OT ${o(r.ot_id)}`;
     default: return String(r.id ?? '');
   }
 }
@@ -342,6 +343,7 @@ const Demo = (() => {
     stock_ingresos: () => ({fecha: hoy(), registrado_por: S.me.id, costo_unit: null, doc_ref: null, kg: null}),
     asistencia: () => ({perfil_id: S.me.id, entrada: null, salida: null}),
     ots: () => ({estado: 'en_proceso', cantidad: 1, terminadas: 0, kg_cotizados: null, kg_producidos: 0, unidad: 'pza', creada: new Date().toISOString()}),
+    maquina_uso: () => ({fecha: hoy(), nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
     produccion: () => ({fecha: hoy(), piezas: 0, nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
     materiales: () => ({stock: 0, stock_min: 0, activo: true, costo_estimado: false, unidad: 'un', kg_unidad: null, grupo: null}),
     perfiles: () => ({rol: 'operario', activo: true}),
@@ -361,6 +363,7 @@ const Demo = (() => {
     r.total = (+r.cantidad || 0) * (+r.costo_unit || 0);
   }
   function before(t, r, old) {
+    if (t === 'maquina_uso') { const m = T.maquinas.find(x => x.id === r.maquina_id); r.horas = +r.horas || 0; r.costo = m ? Math.round(r.horas * m.costo_hh) : 0; r.costo_estimado = !!m?.estimada; }
     if (t === 'hh_registros') {
       if (!r.fecha) r.fecha = ymd(r.inicio || Date.now());
       if (r.tarifa_id == null) r.tarifa_id = T.perfiles.find(p => p.id === r.perfil_id)?.tarifa_id ?? null;
@@ -431,7 +434,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 9) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 10) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -477,7 +480,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 9, _seq: {}, auditoria: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 10, _seq: {}, auditoria: [], maquina_uso: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -614,8 +617,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos'];
-      const opc = ['produccion', 'compras', 'ot_stock', 'documentos']; // toleran que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso'];
+      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso']; // toleran que falte la migración
       const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
@@ -625,6 +628,10 @@ const Cloud = (() => {
         all(() => sb.from('asistencia').select('*').gte('fecha', desde).order('id')),
         all(() => sb.from('stock_ingresos').select('*').gte('fecha', desde).order('id'))]);
       out.hh = [...h1, ...h2]; out.asistencia = as; out.stock_ingresos = si;
+      if (out.maquina_uso.length) {   // costos de las horas de máquina: solo los ven administración y gerencia
+        const mc = new Map((await all(() => sb.from('maquina_uso_costo').select('*').order('uso_id')).catch(() => [])).map(x => [x.uso_id, x]));
+        out.maquina_uso = out.maquina_uso.map(x => ({...x, costo: mc.get(x.id)?.costo, costo_estimado: mc.get(x.id)?.estimado}));
+      }
       return out;
     },
     async ins(t, row) { const {data, error} = await sb.from(t).insert(row).select().single(); if (error) throw error; return data; },
@@ -748,6 +755,8 @@ function costOT(ot) {
     abiertas: open.length, hh, cons, servL: serv
   };
   serv.forEach(s => c.servT[s.tipo] = (c.servT[s.tipo] || 0) + (+s.total || 0));
+  c.uso = S.d.maquina_uso.filter(x => x.ot_id === ot.id).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+  c.horasMaqUso = sum(c.uso, x => x.horas); c.maq += sum(c.uso, x => x.costo); c.est += sum(c.uso.filter(x => x.costo_estimado), x => x.costo);
   c.directo = c.mo + c.extra + c.maq + c.mat + c.serv;
   c.gg = c.directo * cfg('gg_pct') / 100; c.total = c.directo + c.gg;
   c.unit = c.total / (+ot.cantidad || 1);
@@ -1069,6 +1078,7 @@ function vOTDetalle() {
     return `<div class="card"><div class="row between"><h3>Stock del proyecto</h3><button class="btn" data-act="go-stockot" data-id="${o.id}">Ver stock y salidas</button></div>
       <div class="row" style="gap:28px">${adm ? `<div><div class="label">Comprado con OC</div><div class="pill-n">${clp(r.comprado)}</div></div><div><div class="label">Cargado a la OT</div><div class="pill-n">${clp(r.entregado)}</div></div><div><div class="label">Saldo sin usar</div><div class="pill-n">${clp(r.saldo)}</div></div>` : ''}
         <div><div class="label">Saldo en kg</div><div class="pill-n">${kg(r.kgSaldo)}</div></div><div><div class="label">Líneas con saldo</div><div class="pill-n">${r.conSaldo} de ${r.ls.length}</div></div></div></div>`; })()}
+  ${vMaquinasOT(o, c, adm)}
   ${vDocsOT(o)}
   <div class="grid2">
     <div class="card"><div class="row between"><h3>Horas hombre</h3><span class="muted small">${hrs(c.horas)}${+o.ppto_horas ? ` de ${hrs(o.ppto_horas)} cotizadas` : ''}</span></div>
@@ -1082,6 +1092,25 @@ function vOTDetalle() {
         ${adm ? `<td class="n">${x.estado_costo === 'pendiente' ? '<span class="chip warn">sin costo</span>' : clp(x.total)}${x.estado_costo === 'estimado' ? ' <span class="chip est">est.</span>' : ''}</td><td>${verCostos() ? `<button class="btn ghost" data-act="costo-edit" data-t="servicios" data-id="${x.id}">${x.estado_costo === 'real' ? 'Editar' : 'Completar'}</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin servicios.</div>'}
       <button class="btn ghost" data-act="serv-new" data-ot="${o.id}">+ Registrar servicio</button></div>
   </div>`;
+}
+function vMaquinasOT(o, c, adm) {
+  const tareas = c.hh.filter(r => r.maquina_id && closed(r)), hT = sum(tareas, r => r.horas);
+  return `<div class="card"><div class="row between"><h3>Horas de máquina</h3>${isJefe() ? `<button class="btn" data-act="muso-new" data-ot="${o.id}">+ Horas de máquina</button>` : ''}</div>
+    <p class="small muted">Las horas que el operador anota con una máquina en su tarea ya cuentan solas (${hrs(hT)} en esta OT). Aquí se registra el tiempo de máquina que <strong>no</strong> está en una tarea: la máquina trabajó sola o con otro operador. No repitas lo que ya anotó el operador.</p>
+    ${c.uso.length ? `<div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Máquina</th><th class="n">Horas</th>${adm ? '<th class="n">Costo</th>' : ''}<th>Nota</th><th></th></tr></thead><tbody>${c.uso.map(x => `<tr><td>${fechaTxt(x.fecha)}</td><td>${esc(byId(S.d.maquinas, x.maquina_id)?.nombre || '—')}</td><td class="n">${hrs(x.horas)}</td>
+      ${adm ? `<td class="n">${x.costo == null ? '—' : clp(x.costo)}${x.costo_estimado ? ' <span class="chip est">est.</span>' : ''}</td>` : ''}<td style="white-space:normal">${esc(x.nota || '')}</td>
+      <td>${isJefe() ? `<button class="btn ghost danger" data-act="muso-del" data-id="${x.id}">Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin horas de máquina registradas aparte.</div>'}</div>`;
+}
+function sheetMaquinaUso(otId) {
+  const o = otOf(otId), maqs = S.d.maquinas.filter(m => m.activa);
+  openModal('Horas de máquina', `<form data-form="muso"><input type="hidden" name="ot" value="${otId}">
+    <div class="small muted"><span class="ot">${esc(o.numero)}</span> ${esc(o.descripcion || '')}</div>
+    <label class="f"><span>Máquina</span><select name="maq" id="mu-m" required><option value="">Elige…</option>${maqs.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('')}</select></label>
+    <div class="fgrid"><label class="f"><span>Fecha</span><input type="date" name="fecha" id="mu-f" value="${hoy()}" required></label>
+      <label class="f"><span>Horas de máquina</span><input type="number" name="horas" id="mu-h" min="0" max="24" step="any" inputmode="decimal" required></label></div>
+    <label class="f"><span>Nota (opcional)</span><input type="text" name="nota" id="mu-n" placeholder="ej.: horno de tratamiento térmico, ciclo nocturno"></label>
+    <p class="small muted">Úsalo solo para tiempo de máquina que no está en las tareas de los operarios. El costo se calcula con el costo por hora de la máquina (Ajustes › Máquinas).</p>
+    <button class="btn pri xl">Guardar</button></form>`);
 }
 function vProduccionOT(o, c, adm) {
   const fila = (l, v, ref) => `<span class="muted">${l}</span><span class="v">${v}${ref ? ` <span class="muted tiny">cotizado ${ref}</span>` : ''}</span>`;
@@ -1120,14 +1149,14 @@ function sheetOT(o) {
   const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || o._p || {};
   const v = x => x == null ? '' : x;
   openModal(o.id ? `Editar ${o.numero}` : 'Nueva OT', `<form data-form="ot"><input type="hidden" name="id" value="${o.id || ''}">
-    ${!o.id && S.ui.otDoc ? `<div class="card" style="background:var(--surface2)"><strong>Datos leídos con IA.</strong> <span class="small">Revísalos y corrige lo que haga falta. Al guardar, el documento queda dentro de la OT.</span>${(o._adv || []).length ? `<div class="small" style="margin-top:6px">${o._adv.map(esc).join('<br>')}</div>` : ''}</div>` : ''}
+    ${!o.id && S.ui.otDoc ? `<div class="card" style="background:var(--surface2)"><strong>Datos leídos con IA.</strong> <span class="small">Revísalos y corrige lo que haga falta. Al guardar, el documento queda dentro de la OT.</span>${(o._adv || []).filter(x => !/\bkg\b/i.test(x)).length ? `<div class="small" style="margin-top:6px">${o._adv.filter(x => !/\bkg\b/i.test(x)).map(esc).join('<br>')}</div>` : ''}${o.kg_cotizados ? '' : '<div class="small" style="margin-top:6px"><strong>Falta el peso total.</strong> El documento no lo indica: escríbelo en «Kg totales cotizados». Puedes guardar la OT sin él y completarlo después, pero sin ese dato no se mide el avance por kg.</div>'}</div>` : ''}
     <div class="fgrid"><label class="f"><span>N° OT</span><input type="text" name="numero" id="ot-n" value="${esc(o.numero || '')}" required placeholder="OT-2621"></label>
       <label class="f"><span>Estado</span><select name="estado" id="ot-e">${Object.entries(ESTADOS_OT).map(([k, l]) => `<option value="${k}" ${o.estado === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
     <label class="f"><span>Cliente</span><input type="text" name="cliente" id="ot-c" value="${esc(o.cliente || '')}" required></label>
     <label class="f"><span>Descripción</span><input type="text" name="descripcion" id="ot-d" value="${esc(o.descripcion || '')}"></label>
     <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cantidad" id="ot-q" min="1" step="any" value="${v(o.cantidad)}" required></label>
       <label class="f"><span>Unidad</span><input type="text" name="unidad" id="ot-u" value="${esc(o.unidad || 'pza')}" placeholder="pza, spool, m"></label>
-      <label class="f"><span>Kg totales cotizados</span><input type="number" name="kg_cotizados" id="ot-kg" min="0" step="any" value="${v(o.kg_cotizados)}" inputmode="decimal"></label>
+      <label class="f"><span>Kg totales cotizados</span><input type="number" name="kg_cotizados" id="ot-kg" min="0" step="any" value="${v(o.kg_cotizados)}" inputmode="decimal"${!o.id && S.ui.otDoc && !o.kg_cotizados ? ' style="border-color:var(--warn,#d97706)" placeholder="Ingrésalo a mano"' : ''}></label>
       <label class="f"><span>Entrega</span><input type="date" name="fecha_entrega" id="ot-f" value="${v(o.fecha_entrega)}"></label>
       <label class="f"><span>HH cotizadas</span><input type="number" name="ppto_horas" id="ot-h" min="0" step="any" value="${v(o.ppto_horas)}"></label></div>
     ${verCostos() ? `<div class="label">Cotización (administración y gerencia)</div><div class="fgrid">
@@ -1572,7 +1601,7 @@ const CAT = {
   procesos: {t: 'procesos', title: 'Procesos propios', help: 'Costo por unidad de pintura, arenado y tratamiento térmico hechos en el taller (insumos y energía; las HH se registran aparte).',
     fields: [['nombre', 'Nombre', 'text'], ['tipo', 'Tipo', 'sel', () => Object.entries(TIPOS_SERV)], ['unidad', 'Unidad', 'text'], ['costo_unit', 'Costo por unidad $', 'num'], ['estimada', 'Valor estimado', 'bool']],
     cols: [['nombre', 'Proceso'], [r => TIPOS_SERV[r.tipo], 'Tipo'], ['unidad', 'Unidad'], [r => clp(r.costo_unit) + (r.estimada ? ' <span class="chip est">est.</span>' : ''), 'Costo', 'n']]},
-  maquinas: {t: 'maquinas', title: 'Máquinas', help: 'Costo por hora de uso: depreciación, energía y mantención. Se suma a la OT cuando el operario elige la máquina.',
+  maquinas: {t: 'maquinas', title: 'Máquinas', help: 'Costo por hora de uso de la máquina SIN el sueldo del operador (el operador se cobra aparte con su tarifa): depreciación, energía, mantención e insumos propios de la máquina. Los consumibles que sacas de bodega se cargan a la OT por separado. Se suma a la OT cuando el operario elige la máquina en su tarea, o cuando el Jefe de taller registra horas de máquina en la OT.',
     fields: [['nombre', 'Nombre', 'text'], ['costo_hh', 'Costo hora $', 'num'], ['estimada', 'Valor estimado', 'bool'], ['activa', 'Activa', 'bool']],
     cols: [['nombre', 'Máquina'], [r => clp(r.costo_hh) + (r.estimada ? ' <span class="chip est">est.</span>' : ''), 'Costo hora', 'n'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
   operaciones: {t: 'operaciones', title: 'Operaciones', fields: [['nombre', 'Nombre', 'text'], ['activa', 'Activa', 'bool']], cols: [['nombre', 'Operación'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
@@ -1779,6 +1808,9 @@ const ACT = {
   'tr-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const ot = el.dataset.k === 'ot';
     document.getElementById('tr-modo').value = el.dataset.k; document.getElementById('tr-bod').hidden = ot; document.getElementById('tr-ot-txt').hidden = !ot; },
   'linea-edit': el => sheetLinea(+el.dataset.id),
+  'muso-new': el => sheetMaquinaUso(+el.dataset.ot),
+  'muso-del': el => openModal('Quitar horas de máquina', `<p>¿Quitar este registro de horas de máquina? Se descuenta el costo de la OT.</p><div class="row"><button class="btn danger" data-act="muso-del-ok" data-id="${el.dataset.id}">Quitar</button><button class="btn" data-act="close">Cancelar</button></div>`),
+  'muso-del-ok': el => run(() => DB.del('maquina_uso', +el.dataset.id), 'Registro quitado'),
   'prod-new': el => sheetProduccion(+el.dataset.ot || (S.tab === 'ot' ? S.ui.otId : null)),
   'prod-del': el => { const x = byId(S.d.produccion, +el.dataset.id); openModal('Eliminar registro de producción', `<p>¿Eliminar ${kg(x.kg)} del ${fechaTxt(x.fecha)}? Se descuentan del total de la OT.</p><div class="row"><button class="btn danger" data-act="prod-del-ok" data-id="${x.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`); },
   'prod-del-ok': el => run(() => DB.del('produccion', +el.dataset.id), 'Registro eliminado'),
@@ -1872,6 +1904,11 @@ const FORMS = {
         await DB.upsert('ot_ppto', {ot_id: o.id, ppto_hh: n('ppto_hh') || 0, ppto_material: n('ppto_material') || 0, ppto_servicios: n('ppto_servicios') || 0, ppto_maquina: n('ppto_maquina') || 0, precio_venta: n('precio_venta') || 0});
       }
     }, id ? 'OT guardada' : 'OT creada');
+  },
+  muso(fd) {
+    const horas = +fd.get('horas'), maq = +fd.get('maq');
+    if (!maq) return toast('Elige la máquina'); if (!(horas > 0 && horas <= 24)) return toast('Las horas deben estar entre 0 y 24');
+    return run(() => DB.ins('maquina_uso', {ot_id: +fd.get('ot'), maquina_id: maq, fecha: fd.get('fecha'), horas, nota: fd.get('nota') || null}), 'Horas de máquina registradas');
   },
   serv(fd) {
     const ext = fd.get('modo') === 'externo', cu = fd.get('cu');
