@@ -1207,12 +1207,13 @@ const itemHtml = (x = {}) => `<div class="it card" data-iid="${x.id || ''}" styl
     <label class="f"><span>Cantidad total</span><input type="number" class="it-q" step="any" min="0" value="${x.cantidad ?? ''}" inputmode="decimal"></label>
     <label class="f"><span>Kg del ítem</span><input type="number" class="it-k" step="any" min="0" value="${x.kg ?? ''}" inputmode="decimal"></label>
     ${verCostos() ? `<label class="f"><span>Costo/kg ($)</span><input type="number" class="it-ck" step="any" min="0" value="${x.costo_kg ?? tipoVig(x.tipo_id)?.costo_kg ?? ''}" inputmode="decimal"></label>
-    <label class="f"><span>Precio venta/kg ($)</span><input type="number" class="it-pk" step="any" min="0" value="${x.precio_kg ?? tipoVig(x.tipo_id)?.precio_kg ?? ''}" inputmode="decimal"></label>` : ''}
+    <label class="f"><span>Precio venta/kg ($)</span><input type="number" class="it-pk" step="any" min="0" value="${x.precio_kg ?? tipoVig(x.tipo_id)?.precio_kg ?? ''}" inputmode="decimal"></label>
+    <label class="check small" style="grid-column:1/-1"><input type="checkbox" class="it-up"> Actualizar el tipo con este costo y precio (queda en su historial)</label>` : ''}
     <label class="f"><span>HH estimadas</span><input type="number" class="it-h" step="any" min="0" value="${x.ppto_horas ?? ''}" inputmode="decimal" placeholder="opcional"></label></div></div>`;
 function leerItems() {
   return [...document.querySelectorAll('#ot-items .it')].map((el, i) => ({id: +el.dataset.iid || null, nombre: el.querySelector('.it-n').value.trim(), unidad: el.querySelector('.it-u').value,
     cantidad: +el.querySelector('.it-q').value || 0, kg: el.querySelector('.it-k').value === '' ? null : +el.querySelector('.it-k').value, orden: i,
-    tipo_id: +el.querySelector('.it-t').value || null,
+    tipo_id: +el.querySelector('.it-t').value || null, actualizar: !!el.querySelector('.it-up')?.checked,
     costo_kg: el.querySelector('.it-ck') ? (el.querySelector('.it-ck').value === '' ? null : +el.querySelector('.it-ck').value) : (tipoVig(+el.querySelector('.it-t').value || null)?.costo_kg ?? null),
     precio_kg: el.querySelector('.it-pk') ? (el.querySelector('.it-pk').value === '' ? null : +el.querySelector('.it-pk').value) : (tipoVig(+el.querySelector('.it-t').value || null)?.precio_kg ?? null), ppto_horas: el.querySelector('.it-h').value === '' ? null : +el.querySelector('.it-h').value}));
 }
@@ -1995,6 +1996,10 @@ const FORMS = {
         const r = {nombre: x.nombre, unidad: x.unidad, cantidad: x.cantidad, kg: x.kg, orden: x.orden, tipo_id: x.tipo_id, ppto_horas: x.ppto_horas, costo_kg: x.costo_kg, precio_kg: x.precio_kg}, ant = x.id && viejos.find(y => y.id === x.id);
         if (!x.id) await DB.ins('ot_items', {ot_id: o.id, ...r});
         else if (ant && ['nombre', 'unidad', 'cantidad', 'kg', 'orden', 'tipo_id', 'ppto_horas', 'costo_kg', 'precio_kg'].some(k => String(ant[k] ?? '') !== String(r[k] ?? ''))) await DB.upd('ot_items', x.id, r);
+      }
+      for (const x of its) {   // casilla «Actualizar el tipo»: el costo/precio del ítem pasa a ser el vigente del tipo
+        const t = x.actualizar && x.tipo_id && byId(S.d.tipos_item, x.tipo_id);
+        if (t && (+t.costo_kg !== +x.costo_kg || +t.precio_kg !== +x.precio_kg) && (x.costo_kg != null || x.precio_kg != null)) await DB.upd('tipos_item', t.id, {costo_kg: x.costo_kg, precio_kg: x.precio_kg});
       }
       const od = S.ui.otDoc; S.ui.otDoc = null;
       if (!id && od && od.file) { try { await guardarDoc(od.file, {ot_id: o.id, tipo: od.tipo, nota: 'Documento de la OT (leído con IA)'}); } catch (e) { toast('OT creada, pero no se pudo guardar el documento: ' + errTxt(e)); } }
