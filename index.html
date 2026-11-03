@@ -284,7 +284,7 @@ const AUD = {
   col: {costo_unit: 'Costo unitario', costo_hh: 'Costo hora', costo_hh_extra: 'Costo hora extra', precio_venta: 'Precio de venta', ppto_hh: 'Mano de obra cotizada', ppto_material: 'Materiales cotizados',
     ppto_servicios: 'Servicios cotizados', ppto_maquina: 'Máquinas cotizadas', stock: 'Stock', stock_min: 'Stock mínimo', nombre: 'Nombre', rol: 'Rol', activo: 'Activo', activa: 'Activa',
     estado: 'Estado', cantidad: 'Cantidad', kg: 'Kg', kg_unidad: 'Kg por unidad', cliente: 'Cliente', numero: 'Número', descripcion: 'Descripción', unidad: 'Unidad', grupo: 'Grupo',
-    horas: 'Horas', horas_extra: 'Horas extra', estimada: 'Estimado', costo_estimado: 'Costo estimado', estado_costo: 'Tipo de costo', proveedor: 'Proveedor', fecha: 'Fecha', tipo: 'Tipo',
+    horas: 'Horas', horas_extra: 'Horas extra', estimada: 'Estimado', sueldo_mes: 'Sueldo del mes', horas_mes: 'Horas del mes', mult_extra: 'Multiplicador hora extra', costo_estimado: 'Costo estimado', estado_costo: 'Tipo de costo', proveedor: 'Proveedor', fecha: 'Fecha', tipo: 'Tipo',
     codigo: 'Código', usuario: 'Usuario', tarifa_id: 'Tarifa', valor: 'Valor', clave: 'Parámetro', neto: 'Neto', terminadas: 'Terminadas', kg_cotizados: 'Kg cotizados', kg_producidos: 'Kg producidos',
     fecha_entrega: 'Entrega', ppto_horas: 'HH cotizadas', ot_id: 'OT', doc_ref: 'Documento', nota: 'Nota', inicio: 'Inicio', fin: 'Término', piezas: 'Piezas'}
 };
@@ -1560,9 +1560,11 @@ function vReportes() {
 const CAT = {
   trabajadores: {t: 'perfiles', title: 'Trabajadores', fields: [['nombre', 'Nombre', 'text'], ['rol', 'Rol', 'sel', () => Object.entries(ROLES).filter(([k]) => isAdmin() || !['admin', 'gerencia'].includes(k))], ['tarifa_id', 'Categoría / tarifa', 'sel', () => [['', 'Sin tarifa'], ...S.d.tarifas.map(t => [t.id, t.nombre])]], ['activo', 'Activo', 'bool']],
     cols: [['nombre', 'Nombre'], ['usuario', 'Usuario'], [r => ROLES[r.rol], 'Rol'], [r => byId(S.d.tarifas, r.tarifa_id)?.nombre || '—', 'Tarifa'], [r => r.activo ? '<span class="chip ok">Activo</span>' : '<span class="chip">Inactivo</span>', 'Estado']]},
-  tarifas: {t: 'tarifas', title: 'Costo HH por categoría', help: 'Costo empresa por hora: sueldo + leyes sociales + bonos, dividido por las horas normales del mes. Puedes crear una por persona si su costo es distinto. Marca "estimado" si aún no tienes el dato exacto.',
-    fields: [['nombre', 'Categoría o nombre', 'text'], ['costo_hh', 'Costo hora normal $', 'num'], ['costo_hh_extra', 'Costo hora extra $', 'num'], ['estimada', 'Valor estimado', 'bool']],
-    cols: [['nombre', 'Categoría'], [r => clp(r.costo_hh), 'Hora normal', 'n'], [r => clp(r.costo_hh_extra), 'Hora extra', 'n'], [r => r.estimada ? '<span class="chip est">estimado</span>' : '<span class="chip ok">real</span>', 'Dato']]},
+  tarifas: {t: 'tarifas', title: 'Costo HH por categoría', help: 'Escribe el sueldo total del mes (costo empresa: sueldo + leyes sociales + bonos) y las horas que cubre: la app calcula el costo de la hora normal y, con el multiplicador, el de la hora extra. Si no tienes el sueldo, escribe el costo por hora directamente. Puedes crear una categoría por persona si su costo es distinto. Un cambio aplica a las horas que se registren o validen desde ese momento.',
+    fields: [['nombre', 'Categoría o nombre', 'text'], ['sueldo_mes', 'Sueldo total del mes $ (costo empresa)', 'num'], ['horas_mes', 'Horas normales del mes que cubre ese sueldo (ej.: 180)', 'num'], ['mult_extra', 'Multiplicador de la hora extra (1,5 = 50 % de recargo)', 'num'],
+      ['costo_hh', 'Costo hora normal $', 'num'], ['costo_hh_extra', 'Costo hora extra $', 'num'], ['estimada', 'Valor estimado', 'bool']],
+    cols: [['nombre', 'Categoría'], [r => r.sueldo_mes ? clp(r.sueldo_mes) : '—', 'Sueldo mes', 'n'], [r => r.horas_mes ? num(r.horas_mes) : '—', 'Horas mes', 'n'], [r => clp(r.costo_hh), 'Hora normal', 'n'],
+      [r => r.mult_extra ? '×' + num(r.mult_extra, 2) : '—', 'Mult.', 'n'], [r => clp(r.costo_hh_extra), 'Hora extra', 'n'], [r => r.estimada ? '<span class="chip est">estimado</span>' : '<span class="chip ok">real</span>', 'Dato']]},
   materiales: {t: 'materiales', title: 'Materiales', help: 'Deja el costo vacío si no lo sabes: los consumos quedan como pendientes hasta que lo completes. El peso por unidad convierte metros o unidades a kg; si lo dejas vacío, la app lo aprende del primer ingreso en que escribas los kg.',
     fields: [['codigo', 'Código', 'text'], ['nombre', 'Nombre', 'text'], ['grupo', 'Grupo (ej.: Discos de corte; vacío si no tiene)', 'list', () => grupos()], ['unidad', 'Unidad', 'text'], ['kg_unidad', 'Kg por unidad (kg/m, kg/un; 1 si la unidad es kg)', 'num'], ['costo_unit', 'Costo unitario $', 'num'], ['costo_estimado', 'Costo estimado', 'bool'], ['stock', 'Stock', 'num'], ['stock_min', 'Stock mínimo', 'num'], ['activo', 'Activo', 'bool']],
     sort: (a, b) => (a.grupo || '\uffff').localeCompare(b.grupo || '\uffff') || a.nombre.localeCompare(b.nombre),
@@ -1589,19 +1591,42 @@ function vAjustes() {
     <p class="small muted">Gastos generales: arriendo, administración, consumos básicos, etc. del mes, divididos por el costo directo del mes. Un cambio aquí se aplica a todas las OT.</p>
     <button class="btn pri">Guardar parámetros</button></form>`;
   const rows = c.sort ? [...(S.d[c.t] || [])].sort(c.sort) : (S.d[c.t] || []);
-  return `<h1>Ajustes</h1>${tabs}<div class="card"><div class="row between"><h2>${c.title}</h2><button class="btn pri" data-act="cat-new" data-k="${k}">+ Agregar</button></div>
+  const calc = k === 'tarifas' ? `<div class="card"><h3>Calculadora rápida de horas</h3><div class="fgrid">
+      <label class="f"><span>Categoría</span><select id="cal-t" data-calc>${[...S.d.tarifas].sort((a, b) => a.nombre.localeCompare(b.nombre)).map(t => `<option value="${t.id}">${esc(t.nombre)}</option>`).join('')}</select></label>
+      <label class="f"><span>Horas normales</span><input type="number" id="cal-n" data-calc min="0" step="any" inputmode="decimal"></label>
+      <label class="f"><span>Horas extra</span><input type="number" id="cal-e" data-calc min="0" step="any" inputmode="decimal"></label></div>
+      <div class="pill-n" id="cal-out">—</div></div>` : '';
+  return `<h1>Ajustes</h1>${tabs}${calc}<div class="card"><div class="row between"><h2>${c.title}</h2><button class="btn pri" data-act="cat-new" data-k="${k}">+ Agregar</button></div>
     ${c.help ? `<p class="small muted">${c.help}</p>` : ''}
     <div class="tbl-wrap"><table><thead><tr>${c.cols.map(([, l, n]) => `<th class="${n || ''}">${l}</th>`).join('')}</tr></thead><tbody>
     ${rows.map(r => `<tr class="click" data-act="cat-edit" data-k="${k}" data-id="${esc(r[c.key || 'id'])}">${c.cols.map(([f, , n]) => `<td class="${n || ''}" style="white-space:normal">${typeof f === 'function' ? f(r) : esc(r[f])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
 }
+// Calcula en vivo el costo por hora desde el sueldo del mes (y bloquea los campos mientras se calculan solos)
+function tarifaAuto() {
+  const g = id => document.getElementById(id), v = id => +g(id)?.value || 0;
+  const fmt = x => '$' + Math.round(x).toLocaleString('es-CL');
+  let extraEditado = false;
+  const recalc = e => {
+    const auto = v('c-sueldo_mes') > 0 && v('c-horas_mes') > 0, m = v('c-mult_extra') || 1.5;
+    g('c-costo_hh').readOnly = auto; g('c-costo_hh_extra').readOnly = auto;
+    if (auto) { const hh = Math.round(v('c-sueldo_mes') / v('c-horas_mes')); g('c-costo_hh').value = hh; g('c-costo_hh_extra').value = Math.round(hh * m); }
+    else if (e && (e.target.id === 'c-costo_hh' || e.target.id === 'c-mult_extra') && !extraEditado && v('c-costo_hh') > 0) g('c-costo_hh_extra').value = Math.round(v('c-costo_hh') * m);
+    if (e && e.target.id === 'c-costo_hh_extra') extraEditado = true;
+    g('t-calc').innerHTML = v('c-costo_hh') > 0 ? `Hora normal <strong>${fmt(v('c-costo_hh'))}</strong> · hora extra <strong>${fmt(v('c-costo_hh_extra'))}</strong>${auto ? ' <span class="muted">(calculado desde el sueldo)</span>' : ''}` : '';
+  };
+  ['c-sueldo_mes', 'c-horas_mes', 'c-mult_extra', 'c-costo_hh', 'c-costo_hh_extra'].forEach(id => g(id)?.addEventListener('input', recalc));
+  recalc();
+}
 function sheetCat(k, id) {
   const c = CAT[k], r = id != null ? S.d[c.t].find(x => String(x[c.key || 'id']) === String(id)) : {};
   const nuevoTrab = k === 'trabajadores' && id == null;
+  if (k === 'tarifas' && id == null) r.mult_extra = 1.5;
   openModal(`${id != null ? 'Editar' : 'Agregar'} · ${c.title}`, `<form data-form="cat"><input type="hidden" name="_k" value="${k}"><input type="hidden" name="_id" value="${esc(id ?? '')}">
     ${c.fields.map(([f, l, ty, opts]) => ty === 'bool' ? `<label class="check"><input type="checkbox" name="${f}" id="c-${f}" ${(id == null ? !/estim/.test(f) : r[f]) ? 'checked' : ''}> ${l}</label>`
       : ty === 'sel' ? `<label class="f"><span>${l}</span><select name="${f}" id="c-${f}">${opts().map(([v, t]) => `<option value="${esc(v)}" ${String(r[f] ?? '') === String(v) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`
       : ty === 'list' ? `<label class="f"><span>${l}</span><input type="text" name="${f}" id="c-${f}" list="c-${f}-l" value="${esc(r[f] ?? '')}"><datalist id="c-${f}-l">${opts().map(v => `<option value="${esc(v)}">`).join('')}</datalist></label>`
       : `<label class="f"><span>${l}</span><input type="${ty === 'num' ? 'number' : ty}" ${ty === 'num' ? 'step="any"' : ''} name="${f}" id="c-${f}" value="${esc(r[f] ?? '')}" ${['nombre', 'fecha', 'unidad'].includes(f) ? 'required' : ''}></label>`).join('')}
+    ${k === 'tarifas' ? '<p class="small" id="t-calc" style="min-height:1.2em"></p>' : ''}
     ${nuevoTrab ? `<div class="fgrid"><label class="f"><span>Usuario para entrar</span><input type="text" name="usuario" id="c-usuario" required autocapitalize="off" placeholder="jperez"></label>
       <label class="f"><span>Clave inicial (mínimo 6)</span><input type="text" name="clave" id="c-clave" minlength="6" required></label></div>
       <p class="small muted">Entrega el usuario y la clave al trabajador. Después puedes cambiarla abriendo su ficha en Ajustes › Trabajadores.</p>` : ''}
@@ -1609,7 +1634,7 @@ function sheetCat(k, id) {
       <div class="row" style="align-items:end"><label class="f" style="flex:1"><span>Clave nueva (mínimo 6)</span><input type="text" id="c-clave-nueva" autocomplete="off" autocapitalize="off" minlength="6"></label>
       <button type="button" class="btn" data-act="clave-set" data-id="${esc(id)}">Cambiar clave</button></div>
       <p class="tiny muted">Solo el administrador puede hacerlo. Entrégale la clave nueva al trabajador.</p></div>` : ''}
-    <div class="row"><button class="btn pri">Guardar</button>${id != null && k !== 'trabajadores' ? `<button type="button" class="btn danger" data-act="cat-del" data-k="${k}" data-id="${esc(id)}">Eliminar</button>` : ''}${id != null && k === 'trabajadores' && isAdmin() && id !== S.me.id ? `<button type="button" class="btn danger" data-act="usr-del" data-id="${esc(id)}">Eliminar trabajador</button>` : ''}</div></form>`);
+    <div class="row"><button class="btn pri">Guardar</button>${id != null && k !== 'trabajadores' ? `<button type="button" class="btn danger" data-act="cat-del" data-k="${k}" data-id="${esc(id)}">Eliminar</button>` : ''}${id != null && k === 'trabajadores' && isAdmin() && id !== S.me.id ? `<button type="button" class="btn danger" data-act="usr-del" data-id="${esc(id)}">Eliminar trabajador</button>` : ''}</div></form>`, k === 'tarifas' ? tarifaAuto : undefined);
 }
 
 /* ---------------- costo pendiente */
@@ -1937,7 +1962,11 @@ const FORMS = {
     const k = fd.get('_k'), c = CAT[k], id = fd.get('_id');
     const row = {};
     c.fields.forEach(([f, , ty]) => { const v = fd.get(f); row[f] = ty === 'bool' ? !!v : ty === 'num' ? (v === '' ? null : +v) : ty === 'sel' ? (v === '' ? null : (/_id$/.test(f) ? +v : v)) : ty === 'list' ? (String(v || '').trim() || null) : (v || null); });
-    if (k === 'tarifas' && row.costo_hh_extra == null && row.costo_hh != null) row.costo_hh_extra = Math.round(row.costo_hh * 1.5);
+    if (k === 'tarifas') {
+      row.mult_extra = row.mult_extra || 1.5;
+      if (row.sueldo_mes > 0 && row.horas_mes > 0) { row.costo_hh = Math.round(row.sueldo_mes / row.horas_mes); row.costo_hh_extra = Math.round(row.costo_hh * row.mult_extra); }
+      else { row.sueldo_mes = row.horas_mes = null; if (row.costo_hh == null) return toast('Escribe el sueldo del mes y las horas, o el costo por hora'); if (row.costo_hh_extra == null) row.costo_hh_extra = Math.round(row.costo_hh * row.mult_extra); }
+    }
     if (k === 'maquinas' && row.costo_hh == null) row.costo_hh = 0;
     if (k === 'procesos' && row.costo_unit == null) row.costo_unit = 0;
     if (k === 'materiales') { row.stock = row.stock ?? 0; row.stock_min = row.stock_min ?? 0; if (row.kg_unidad == null && String(row.unidad).toLowerCase() === 'kg') row.kg_unidad = 1; }
@@ -1989,6 +2018,13 @@ function kgHint() {
   });
 }
 document.addEventListener('change', e => { if (['cs-mat', 'in-mat'].includes(e.target.id)) kgHint(); });
+document.addEventListener('input', e => {
+  if (e.target.dataset?.calc === undefined) return;
+  const t = byId(S.d.tarifas, +document.getElementById('cal-t')?.value), n = +document.getElementById('cal-n').value || 0, x = +document.getElementById('cal-e').value || 0, out = document.getElementById('cal-out');
+  if (!t) { out.textContent = '—'; return; }
+  out.innerHTML = `${clp(n * t.costo_hh + x * t.costo_hh_extra)} <span class="small muted">· ${num(n, 2)} h × ${clp(t.costo_hh)} + ${num(x, 2)} h extra × ${clp(t.costo_hh_extra)}</span>`;
+});
+document.addEventListener('change', e => { if (e.target.id === 'cal-t') e.target.dispatchEvent(new Event('input', {bubbles: true})); });
 document.addEventListener('input', e => {
   if (e.target.dataset?.input === 'kg-calc') return kgHint();
   const k = e.target.dataset?.input; if (!k) return;

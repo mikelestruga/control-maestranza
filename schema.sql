@@ -22,7 +22,10 @@ create table tarifas (
   nombre text not null unique,
   costo_hh numeric not null check (costo_hh >= 0),
   costo_hh_extra numeric not null check (costo_hh_extra >= 0),
-  estimada boolean not null default false
+  estimada boolean not null default false,
+  sueldo_mes numeric check (sueldo_mes >= 0),                 -- sueldo total del mes (costo empresa)
+  horas_mes numeric check (horas_mes > 0),                    -- horas que cubre ese sueldo
+  mult_extra numeric not null default 1.5 check (mult_extra >= 1)   -- hora extra = hora normal × multiplicador
 );
 
 create table perfiles (
@@ -207,6 +210,22 @@ create table stock_ingresos (
 );
 
 -- ---------- Funciones y triggers -------------------------------------
+
+-- Mantiene los costos por hora coherentes con el sueldo, aunque se edite desde otro lado
+create or replace function tarifa_calcula() returns trigger
+language plpgsql as $$
+begin
+  if new.sueldo_mes is not null and new.horas_mes is not null then
+    new.costo_hh := round(new.sueldo_mes / new.horas_mes);
+    new.costo_hh_extra := round(new.costo_hh * new.mult_extra);
+  elsif new.costo_hh_extra is null and new.costo_hh is not null then
+    new.costo_hh_extra := round(new.costo_hh * new.mult_extra);
+  end if;
+  return new;
+end $$;
+drop trigger if exists tarifa_calcula on tarifas;
+create trigger tarifa_calcula before insert or update on tarifas
+  for each row execute function tarifa_calcula();
 
 create or replace function mi_rol() returns text
 language sql stable security definer set search_path = public as $$
