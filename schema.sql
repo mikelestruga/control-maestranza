@@ -836,7 +836,9 @@ grant select on maquina_uso_costo to authenticated;
 create table if not exists tipos_item (
   id bigint generated always as identity primary key,
   nombre text not null unique,
-  activa boolean not null default true
+  activa boolean not null default true,
+  costo_kg numeric check (costo_kg >= 0),      -- costo directo por kg (sin gastos generales)
+  precio_kg numeric check (precio_kg >= 0)     -- precio de venta por kg, opcional
 );
 alter table tipos_item enable row level security;
 drop policy if exists ti_leer on tipos_item; drop policy if exists ti_esc on tipos_item;

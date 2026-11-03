@@ -436,7 +436,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 12) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 13) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -482,7 +482,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 12, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 13, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -503,7 +503,7 @@ const Demo = (() => {
       {id: 'p4', nombre: 'Raúl Díaz', usuario: 'rdiaz', tarifa_id: T_('Mecánico')},
       {id: 'p5', nombre: 'Diego Fuentes', usuario: 'dfuentes', tarifa_id: T_('Ayudante')},
       {id: 'p6', nombre: 'Mario Pérez', usuario: 'mperez', tarifa_id: T_('Pintor')}]);
-    const tip = add('tipos_item', ['Cañería', 'Estructura', 'Estanque', 'Mecanizado', 'Otro'].map(nombre => ({nombre})));
+    const tip = add('tipos_item', [['Cañería', 2800], ['Estructura', 1900], ['Estanque', 2300], ['Mecanizado', 4200], ['Otro', 2000]].map(([nombre, c]) => ({nombre, costo_kg: c, precio_kg: Math.round(c * 1.6)})));
     const ops = add('operaciones', ['Corte', 'Trazado', 'Armado', 'Soldadura', 'Mecanizado', 'Pintura', 'Tratamiento térmico', 'Montaje', 'Control de calidad', 'Otro'].map(nombre => ({nombre})));
     const O = n => ops.find(x => x.nombre === n).id;
     const mq = add('maquinas', [{nombre: 'Torno CNC', costo_hh: 9000}, {nombre: 'Fresadora', costo_hh: 7000}, {nombre: 'Equipo arco sumergido', costo_hh: 4500, estimada: true}, {nombre: 'Oxicorte / plasma', costo_hh: 3500}]);
@@ -1153,7 +1153,8 @@ function sheetOT(o) {
   o = o || {estado: 'en_proceso', cantidad: 1, unidad: 'pza', terminadas: 0};
   const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || o._p || {};
   const v = x => x == null ? '' : x;
-  const _om = sh => { const calc = () => { const it = leerItems(); const kgT = sum(it, x => x.kg), unis = new Set(it.map(x => x.unidad)); document.getElementById('ot-tot').textContent = `${it.length} ítem${it.length === 1 ? '' : 's'} · ${[...unis].map(u => num(sum(it.filter(x => x.unidad === u), x => x.cantidad), 2) + (u === 'm' ? ' m' : ' pza')).join(' + ') || '—'} · ${kg(kgT)}`; };
+  const _om = sh => { const calc = () => { const it = leerItems(); const kgT = sum(it, x => x.kg), unis = new Set(it.map(x => x.unidad)); const est = verCostos() && it.length && it.every(x => estItem(x) != null) ? ` · costo estimado ${clp(sum(it, estItem))}` : '';
+    document.getElementById('ot-tot').textContent = `${it.length} ítem${it.length === 1 ? '' : 's'} · ${[...unis].map(u => num(sum(it.filter(x => x.unidad === u), x => x.cantidad), 2) + (u === 'm' ? ' m' : ' pza')).join(' + ') || '—'} · ${kg(kgT)}${est}`; };
     sh.addEventListener('input', e => { if (e.target.closest('#ot-items')) calc(); }); sh.addEventListener('click', e => { if (e.target.closest('[data-act=it-del],[data-act=it-add]')) setTimeout(calc, 0); }); calc(); };
   openModal(o.id ? `Editar ${o.numero}` : 'Nueva OT', `<form data-form="ot"><input type="hidden" name="id" value="${o.id || ''}">
     ${!o.id && S.ui.otDoc ? `<div class="card" style="background:var(--surface2)"><strong>Datos leídos con IA.</strong> <span class="small">Revísalos y corrige lo que haga falta. Al guardar, el documento queda dentro de la OT.</span>${(o._adv || []).filter(x => !/\bkg\b/i.test(x)).length ? `<div class="small" style="margin-top:6px">${o._adv.filter(x => !/\bkg\b/i.test(x)).map(esc).join('<br>')}</div>` : ''}${itemsOT(o).some(x => x.kg) ? '' : '<div class="small" style="margin-top:6px"><strong>Faltan los kg.</strong> El documento no indica el peso de los ítems: escríbelo en cada ítem. Puedes guardar la OT sin él y completarlo después, pero sin ese dato no se mide el avance por kg.</div>'}</div>` : ''}
@@ -1201,20 +1202,21 @@ function leerItems() {
     tipo_id: +el.querySelector('.it-t').value || null, ppto_horas: el.querySelector('.it-h').value === '' ? null : +el.querySelector('.it-h').value}));
 }
 // Reparto del costo real de la OT entre sus ítems: por HH estimadas si todos las tienen; si no, por kg.
+const estItem = x => { const t = byId(S.d.tipos_item, x.tipo_id); return t && t.costo_kg != null && x.kg > 0 ? +x.kg * +t.costo_kg * (1 + cfg('gg_pct') / 100) : null; };
 function costoItems(o, c) {
   const it = S.d.ot_items.filter(x => x.ot_id === o.id).sort((a, b) => (a.orden || 0) - (b.orden || 0) || a.id - b.id); if (!it.length) return [];
-  const porHH = it.every(x => +x.ppto_horas > 0), w = x => porHH ? +x.ppto_horas : (+x.kg || 0), W = sum(it, w);
+  const porTipo = it.every(x => estItem(x) != null), porHH = !porTipo && it.every(x => +x.ppto_horas > 0), w = x => porTipo ? estItem(x) : porHH ? +x.ppto_horas : (+x.kg || 0), W = sum(it, w);
   return it.map(x => { const sh = W ? w(x) / W : 1 / it.length;
-    return {...x, share: sh, costo: c.total * sh, pptoC: (c.pTotal || 0) * sh, venta: c.p?.precio_venta ? +c.p.precio_venta * sh : null, porHH}; });
+    return {...x, share: sh, costo: c.total * sh, pptoC: (c.pTotal || 0) * sh, venta: c.p?.precio_venta ? +c.p.precio_venta * sh : null, porHH, porTipo, est: estItem(x)}; });
 }
 function vItemsOT(o, c, adm) {
   if (!o.id || !S.d.ot_items.some(x => x.ot_id === o.id)) return '';
   const it = costoItems(o, c), kgT = sum(it, x => x.kg), tn = x => byId(S.d.tipos_item, x.tipo_id)?.nombre || 'Sin tipo', ck = (v, k) => k > 0 ? clp(v / k) : '—';
-  return `<div class="card"><h3>Ítems de la OT</h3><div class="tbl-wrap"><table><thead><tr><th>Ítem</th><th class="n">Cantidad</th><th class="n">Kg</th>${adm ? '<th class="n">Costo real</th><th class="n">Costo/kg</th><th class="n">Venta/kg</th>' : ''}</tr></thead><tbody>
+  return `<div class="card"><h3>Ítems de la OT</h3><div class="tbl-wrap"><table><thead><tr><th>Ítem</th><th class="n">Cantidad</th><th class="n">Kg</th>${adm ? '<th class="n">Estimado (tipo)</th><th class="n">Costo real</th><th class="n">Costo/kg</th><th class="n">Venta/kg</th>' : ''}</tr></thead><tbody>
     ${it.map(x => `<tr><td style="white-space:normal">${esc(x.nombre)}<div class="tiny muted">${esc(tn(x))}${+x.ppto_horas ? ` · ${num(x.ppto_horas, 1)} HH est.` : ''}</div></td><td class="n">${num(x.cantidad, 2)} ${x.unidad === 'm' ? 'm' : 'pza'}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td>
-      ${adm ? `<td class="n">${clp(x.costo)}</td><td class="n">${ck(x.costo, x.kg)}</td><td class="n">${x.venta != null ? ck(x.venta, x.kg) : '—'}</td>` : ''}</tr>`).join('')}</tbody>
-    <tfoot><tr><td><strong>Total</strong></td><td class="n"></td><td class="n"><strong>${num(kgT, 1)}</strong></td>${adm ? `<td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${ck(c.total, kgT)}</td><td class="n"></td>` : ''}</tr></tfoot></table></div>
-    ${adm ? `<p class="small muted">El costo real de la OT se reparte entre los ítems ${it[0].porHH ? 'según sus HH estimadas' : 'según sus kg (completa las HH estimadas de cada ítem para un reparto más justo)'}. Es una estimación hasta que las horas se registren por ítem.</p>` : ''}</div>`;
+      ${adm ? `<td class="n">${x.est != null ? clp(x.est) : '—'}</td><td class="n">${clp(x.costo)}</td><td class="n">${ck(x.costo, x.kg)}</td><td class="n">${x.venta != null ? ck(x.venta, x.kg) : '—'}</td>` : ''}</tr>`).join('')}</tbody>
+    <tfoot><tr><td><strong>Total</strong></td><td class="n"></td><td class="n"><strong>${num(kgT, 1)}</strong></td>${adm ? `<td class="n"><strong>${it.every(x => x.est != null) ? clp(sum(it, x => x.est)) : '—'}</strong></td><td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${ck(c.total, kgT)}</td><td class="n"></td>` : ''}</tr></tfoot></table></div>
+    ${adm ? `<p class="small muted">El costo real de la OT se reparte entre los ítems ${it[0].porTipo ? 'según su costo estimado (kg × costo/kg de su tipo)' : it[0].porHH ? 'según sus HH estimadas' : 'según sus kg (asigna un tipo con costo por kg a cada ítem para un reparto más justo)'}. Es una estimación hasta que las horas se registren por ítem.</p>` : ''}</div>`;
 }
 
 /* ---------------- SERVICIOS */
@@ -1627,12 +1629,12 @@ function vReportes() {
       ${rows.map(([k, e]) => `<tr><td style="white-space:normal">${esc(k)}</td><td class="n">${e.n}</td><td class="n">${e.u.size === 1 ? `${num(e.cant, 2)} ${esc([...e.u][0] || '')}` : 'varias unidades'}</td><td class="n">${e.kg ? num(e.kg, 0) : '—'}</td><td class="n">${clp(e.total)}</td><td class="n">${e.u.size === 1 && e.cant ? clp(e.total / e.cant) + '/' + esc([...e.u][0] || '') : '—'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Sin salidas en el período.</td></tr>'}
       </tbody></table></div></div>`; })()}
   ${(() => { const por = {};
-    S.d.ots.filter(o => o.estado === 'terminada' || o.estado === 'entregada').forEach(o => { const c = costOT(o); costoItems(o, c).forEach(x => { const t = byId(S.d.tipos_item, x.tipo_id)?.nombre || 'Sin tipo', e = por[t] = por[t] || {kg: 0, costo: 0, venta: 0, vk: 0, n: new Set()}; e.n.add(o.id);
+    S.d.ots.filter(o => o.estado === 'terminada' || o.estado === 'entregada').forEach(o => { const c = costOT(o); costoItems(o, c).forEach(x => { const tp = byId(S.d.tipos_item, x.tipo_id), t = tp?.nombre || 'Sin tipo', e = por[t] = por[t] || {kg: 0, costo: 0, venta: 0, vk: 0, n: new Set(), ref: tp?.costo_kg != null ? +tp.costo_kg * (1 + cfg('gg_pct') / 100) : null}; e.n.add(o.id);
       if (x.kg > 0) { e.kg += +x.kg; e.costo += x.costo; if (x.venta != null) { e.venta += x.venta; e.vk += +x.kg; } } }); });
     const f = Object.entries(por).filter(([, e]) => e.kg > 0).sort((a, b) => b[1].kg - a[1].kg);
-    return `<div class="card"><h2>Costo por kg según tipo de trabajo</h2><p class="small muted">Solo OT terminadas o entregadas. El costo de cada OT se reparte entre sus ítems (ver cada OT).</p>
-      ${f.length ? `<div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th class="n">OT</th><th class="n">Kg</th><th class="n">Costo/kg</th><th class="n">Venta/kg</th><th class="n">Margen</th></tr></thead><tbody>
-      ${f.map(([t, e]) => { const ckg = e.costo / e.kg, vkg = e.vk ? e.venta / e.vk : null; return `<tr><td>${esc(t)}</td><td class="n">${e.n.size}</td><td class="n">${kg(e.kg)}</td><td class="n">${clp(ckg)}</td><td class="n">${vkg != null ? clp(vkg) : '—'}</td><td class="n">${vkg != null ? pct((vkg - ckg) / vkg * 100) : '—'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Aún no hay OT terminadas con ítems y kg.</div>'}</div>`; })()}
+    return `<div class="card"><h2>Costo por kg según tipo de trabajo</h2><p class="small muted">Solo OT terminadas o entregadas. La referencia es el costo/kg del tipo con gastos generales. El costo real de cada OT se reparte entre sus ítems (ver cada OT).</p>
+      ${f.length ? `<div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th class="n">OT</th><th class="n">Kg</th><th class="n">Referencia/kg</th><th class="n">Costo real/kg</th><th class="n">Venta/kg</th><th class="n">Margen</th></tr></thead><tbody>
+      ${f.map(([t, e]) => { const ckg = e.costo / e.kg, vkg = e.vk ? e.venta / e.vk : null; return `<tr><td>${esc(t)}</td><td class="n">${e.n.size}</td><td class="n">${kg(e.kg)}</td><td class="n">${e.ref != null ? clp(e.ref) : '—'}</td><td class="n" style="color:${e.ref != null && ckg > e.ref * 1.05 ? 'var(--bad)' : 'inherit'}">${clp(ckg)}</td><td class="n">${vkg != null ? clp(vkg) : '—'}</td><td class="n">${vkg != null ? pct((vkg - ckg) / vkg * 100) : '—'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Aún no hay OT terminadas con ítems y kg.</div>'}</div>`; })()}
   <div class="card"><div class="row between"><h2>Costo por OT</h2><button class="btn" data-act="csv-ots">Exportar para el ERP</button></div>
     <div class="tbl-wrap"><table><thead><tr><th>OT</th><th>Cliente</th><th>Estado</th><th class="n">HH</th><th class="n">M. obra</th><th class="n">Máquinas</th><th class="n">Materiales</th><th class="n">Servicios</th><th class="n">GG</th><th class="n">Total</th><th class="n">Cotizado</th><th class="n">Venta</th><th class="n">Margen</th><th class="n">Kg cotiz.</th><th class="n">Kg material</th><th class="n">Kg prod.</th><th class="n">Rend.</th><th class="n">$/kg proy.</th><th class="n">$/kg cotiz.</th></tr></thead><tbody>
     ${S.d.ots.map(o => { const c = costOT(o); return `<tr class="click" data-act="ot-open" data-id="${o.id}"><td><span class="ot">${esc(o.numero)}</span></td><td>${esc(o.cliente)}</td><td>${ESTADOS_OT[o.estado]}</td><td class="n">${num(c.horas)}</td><td class="n">${clp(c.mo + c.extra)}</td><td class="n">${clp(c.maq)}</td><td class="n">${clp(c.mat)}</td><td class="n">${clp(c.serv)}</td><td class="n">${clp(c.gg)}</td><td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${clp(c.pTotal)}</td><td class="n">${clp(c.p?.precio_venta)}</td><td class="n" style="color:${(c.margen || 0) < 0 ? 'var(--bad)' : 'inherit'}">${c.margen == null ? '—' : clp(c.margen)}</td><td class="n">${c.kgCot ? num(c.kgCot, 0) : '—'}</td><td class="n">${num(c.kgMat, 0)}</td><td class="n">${num(c.kgProd, 0)}</td><td class="n">${c.rend != null ? pct(c.rend * 100) : '—'}</td><td class="n">${c.proyKg ? clp(c.proyKg) : '—'}</td><td class="n">${c.pptoKg ? clp(c.pptoKg) : '—'}</td></tr>`; }).join('')}
@@ -1660,7 +1662,8 @@ const CAT = {
     fields: [['nombre', 'Nombre', 'text'], ['costo_hh', 'Costo hora $', 'num'], ['estimada', 'Valor estimado', 'bool'], ['activa', 'Activa', 'bool']],
     cols: [['nombre', 'Máquina'], [r => clp(r.costo_hh) + (r.estimada ? ' <span class="chip est">est.</span>' : ''), 'Costo hora', 'n'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
   operaciones: {t: 'operaciones', title: 'Operaciones', fields: [['nombre', 'Nombre', 'text'], ['activa', 'Activa', 'bool']], cols: [['nombre', 'Operación'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
-  tipos: {t: 'tipos_item', title: 'Tipos de trabajo', help: 'Cada ítem de una OT lleva un tipo (ej.: Cañería, Estructura, Estanque). Los reportes muestran el costo y el precio por kg de cada tipo, porque un kg de cañería no cuesta lo mismo que un kg de estructura.', fields: [['nombre', 'Nombre', 'text'], ['activa', 'Activo', 'bool']], cols: [['nombre', 'Tipo'], [r => r.activa ? 'Sí' : 'No', 'Activo']]},
+  tipos: {t: 'tipos_item', title: 'Tipos de trabajo', help: 'Un kg de cañería no cuesta lo mismo que un kg de estructura. Define el costo directo por kg de cada tipo (mano de obra, materiales y servicios, sin gastos generales). Con él la app estima el costo de cada ítem (kg × costo/kg), reparte el costo real de la OT según esa estimación y compara lo real contra la referencia.', fields: [['nombre', 'Nombre', 'text'], ['costo_kg', 'Costo directo por kg ($)', 'num'], ['precio_kg', 'Precio de venta por kg ($, opcional)', 'num'], ['activa', 'Activo', 'bool']],
+    cols: [['nombre', 'Tipo'], [r => r.costo_kg != null ? clp(r.costo_kg) : '—', 'Costo/kg', 'n'], [r => r.precio_kg != null ? clp(r.precio_kg) : '—', 'Venta/kg', 'n'], [r => r.activa ? 'Sí' : 'No', 'Activo']]},
   dias: {t: 'dias_especiales', key: 'fecha', title: 'Feriados', help: 'En estos días (y los domingos) todas las horas cuentan como extra.', fields: [['fecha', 'Fecha', 'date'], ['descripcion', 'Descripción', 'text']], cols: [[r => fechaTxt(r.fecha), 'Fecha'], ['descripcion', 'Descripción']]}
 };
 const AJ_GERENCIA = ['trabajadores', 'tarifas', 'materiales', 'procesos', 'maquinas', 'tipos'];   // lo demás es de la plataforma: solo administrador
