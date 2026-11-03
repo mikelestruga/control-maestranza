@@ -234,7 +234,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: [], tipos_item: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -286,7 +286,7 @@ const AUD = {
     estado: 'Estado', cantidad: 'Cantidad', kg: 'Kg', kg_unidad: 'Kg por unidad', cliente: 'Cliente', numero: 'Número', descripcion: 'Descripción', unidad: 'Unidad', grupo: 'Grupo',
     horas: 'Horas', horas_extra: 'Horas extra', estimada: 'Estimado', sueldo_mes: 'Sueldo del mes', horas_mes: 'Horas del mes', maquina_id: 'Máquina', mult_extra: 'Multiplicador hora extra', costo_estimado: 'Costo estimado', estado_costo: 'Tipo de costo', proveedor: 'Proveedor', fecha: 'Fecha', tipo: 'Tipo',
     codigo: 'Código', usuario: 'Usuario', tarifa_id: 'Tarifa', valor: 'Valor', clave: 'Parámetro', neto: 'Neto', terminadas: 'Terminadas', kg_cotizados: 'Kg cotizados', kg_producidos: 'Kg producidos',
-    fecha_entrega: 'Entrega', ppto_horas: 'HH cotizadas', tipo_id: 'Tipo de trabajo', ot_id: 'OT', doc_ref: 'Documento', nota: 'Nota', inicio: 'Inicio', fin: 'Término', piezas: 'Piezas'}
+    fecha_entrega: 'Entrega', ppto_horas: 'HH cotizadas', tipo_id: 'Tipo de trabajo', costo_kg: 'Costo por kg', precio_kg: 'Precio de venta por kg', ot_id: 'OT', doc_ref: 'Documento', nota: 'Nota', inicio: 'Inicio', fin: 'Término', piezas: 'Piezas'}
 };
 function audDet(t, r) {
   const o = id => T_.ots.find(x => x.id === id)?.numero || '?';
@@ -405,6 +405,14 @@ const Demo = (() => {
     if (t === 'servicios') { const p = T.procesos.find(x => x.id === r.proceso_id); if (p) r.tipo = p.tipo; costFill(r, p, 'estimada'); }
   }
   function after(t, r, op) {
+    if (t === 'tipos_item' && op !== 'DELETE') {
+      const h = T.tipos_item_hist, f = hoy(), ult = h.filter(x => x.tipo_id === r.id).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id)[0];
+      if (!ult || +ult.costo_kg !== +(r.costo_kg ?? 0) || +ult.precio_kg !== +(r.precio_kg ?? 0)) {
+        if (r.costo_kg == null && r.precio_kg == null) return;
+        if (ult && ult.fecha === f) Object.assign(ult, {costo_kg: r.costo_kg, precio_kg: r.precio_kg});
+        else h.push({id: nid('tipos_item_hist'), tipo_id: r.id, fecha: f, costo_kg: r.costo_kg, precio_kg: r.precio_kg});
+      }
+    }
     if (t === 'hh_registros') {
       if (!closed(r)) return;
       const ta = T.tarifas.find(x => x.id === r.tarifa_id), m = T.maquinas.find(x => x.id === r.maquina_id);
@@ -436,7 +444,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 13) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 14) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -482,7 +490,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 13, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 14, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -504,6 +512,7 @@ const Demo = (() => {
       {id: 'p5', nombre: 'Diego Fuentes', usuario: 'dfuentes', tarifa_id: T_('Ayudante')},
       {id: 'p6', nombre: 'Mario Pérez', usuario: 'mperez', tarifa_id: T_('Pintor')}]);
     const tip = add('tipos_item', [['Cañería', 2800], ['Estructura', 1900], ['Estanque', 2300], ['Mecanizado', 4200], ['Otro', 2000]].map(([nombre, c]) => ({nombre, costo_kg: c, precio_kg: Math.round(c * 1.6)})));
+    tip.forEach((t, i) => { const f = [addDays(hoy(), -120), addDays(hoy(), -60)]; T.tipos_item_hist.push({id: nid('tipos_item_hist'), tipo_id: t.id, fecha: f[0], costo_kg: Math.round(t.costo_kg * 0.9), precio_kg: Math.round(t.precio_kg * 0.9)}, {id: nid('tipos_item_hist'), tipo_id: t.id, fecha: f[1], costo_kg: Math.round(t.costo_kg * 0.96), precio_kg: Math.round(t.precio_kg * 0.95)}, {id: nid('tipos_item_hist'), tipo_id: t.id, fecha: addDays(hoy(), -10), costo_kg: t.costo_kg, precio_kg: t.precio_kg}); });
     const ops = add('operaciones', ['Corte', 'Trazado', 'Armado', 'Soldadura', 'Mecanizado', 'Pintura', 'Tratamiento térmico', 'Montaje', 'Control de calidad', 'Otro'].map(nombre => ({nombre})));
     const O = n => ops.find(x => x.nombre === n).id;
     const mq = add('maquinas', [{nombre: 'Torno CNC', costo_hh: 9000}, {nombre: 'Fresadora', costo_hh: 7000}, {nombre: 'Equipo arco sumergido', costo_hh: 4500, estimada: true}, {nombre: 'Oxicorte / plasma', costo_hh: 3500}]);
@@ -621,8 +630,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item'];
-      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item']; // toleran que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist'];
+      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist']; // toleran que falte la migración
       const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
@@ -1153,8 +1162,9 @@ function sheetOT(o) {
   o = o || {estado: 'en_proceso', cantidad: 1, unidad: 'pza', terminadas: 0};
   const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || o._p || {};
   const v = x => x == null ? '' : x;
-  const _om = sh => { const calc = () => { const it = leerItems(); const kgT = sum(it, x => x.kg), unis = new Set(it.map(x => x.unidad)); const est = verCostos() && it.length && it.every(x => estItem(x) != null) ? ` · costo estimado ${clp(sum(it, estItem))}` : '';
+  const _om = sh => { const calc = () => { const it = leerItems(); const kgT = sum(it, x => x.kg), unis = new Set(it.map(x => x.unidad)); const est = verCostos() && it.length && it.every(x => estItem(x) != null) ? ` · costo estimado ${clp(sum(it, estItem))}${it.every(x => x.precio_kg != null && x.kg > 0) ? ` · venta estimada ${clp(sum(it, x => x.kg * x.precio_kg))}` : ''}` : '';
     document.getElementById('ot-tot').textContent = `${it.length} ítem${it.length === 1 ? '' : 's'} · ${[...unis].map(u => num(sum(it.filter(x => x.unidad === u), x => x.cantidad), 2) + (u === 'm' ? ' m' : ' pza')).join(' + ') || '—'} · ${kg(kgT)}${est}`; };
+    sh.addEventListener('change', e => { if (e.target.classList.contains('it-t')) { const it = e.target.closest('.it'), t = tipoVig(+e.target.value || null); if (it.querySelector('.it-ck')) { it.querySelector('.it-ck').value = t?.costo_kg ?? ''; it.querySelector('.it-pk').value = t?.precio_kg ?? ''; } calc(); } });
     sh.addEventListener('input', e => { if (e.target.closest('#ot-items')) calc(); }); sh.addEventListener('click', e => { if (e.target.closest('[data-act=it-del],[data-act=it-add]')) setTimeout(calc, 0); }); calc(); };
   openModal(o.id ? `Editar ${o.numero}` : 'Nueva OT', `<form data-form="ot"><input type="hidden" name="id" value="${o.id || ''}">
     ${!o.id && S.ui.otDoc ? `<div class="card" style="background:var(--surface2)"><strong>Datos leídos con IA.</strong> <span class="small">Revísalos y corrige lo que haga falta. Al guardar, el documento queda dentro de la OT.</span>${(o._adv || []).filter(x => !/\bkg\b/i.test(x)).length ? `<div class="small" style="margin-top:6px">${o._adv.filter(x => !/\bkg\b/i.test(x)).map(esc).join('<br>')}</div>` : ''}${itemsOT(o).some(x => x.kg) ? '' : '<div class="small" style="margin-top:6px"><strong>Faltan los kg.</strong> El documento no indica el peso de los ítems: escríbelo en cada ítem. Puedes guardar la OT sin él y completarlo después, pero sin ese dato no se mide el avance por kg.</div>'}</div>` : ''}
@@ -1187,6 +1197,7 @@ function itemsOT(o) {   // ítems guardados; si la OT es antigua o viene de un d
   if (it.length) return it;
   return [{nombre: o.descripcion || '', unidad: esM(o.unidad) ? 'm' : 'pza', cantidad: o.cantidad > 0 && o.id ? o.cantidad : (o.cantidad || ''), kg: o.kg_cotizados}];
 }
+const tipoVig = id => byId(S.d.tipos_item, id);
 const itemHtml = (x = {}) => `<div class="it card" data-iid="${x.id || ''}" style="padding:10px;gap:8px;box-shadow:none">
   <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="text" class="it-n" placeholder="Nombre del ítem" value="${esc(x.nombre || '')}" style="flex:1;min-width:0" aria-label="Nombre del ítem">
     <button type="button" class="x" data-act="it-del" aria-label="Quitar ítem">✕</button></div>
@@ -1195,14 +1206,18 @@ const itemHtml = (x = {}) => `<div class="it card" data-iid="${x.id || ''}" styl
     <label class="f"><span>Se mide en</span><select class="it-u"><option value="pza" ${x.unidad === 'm' ? '' : 'selected'}>Piezas</option><option value="m" ${x.unidad === 'm' ? 'selected' : ''}>Metros</option></select></label>
     <label class="f"><span>Cantidad total</span><input type="number" class="it-q" step="any" min="0" value="${x.cantidad ?? ''}" inputmode="decimal"></label>
     <label class="f"><span>Kg del ítem</span><input type="number" class="it-k" step="any" min="0" value="${x.kg ?? ''}" inputmode="decimal"></label>
+    ${verCostos() ? `<label class="f"><span>Costo/kg ($)</span><input type="number" class="it-ck" step="any" min="0" value="${x.costo_kg ?? tipoVig(x.tipo_id)?.costo_kg ?? ''}" inputmode="decimal"></label>
+    <label class="f"><span>Precio venta/kg ($)</span><input type="number" class="it-pk" step="any" min="0" value="${x.precio_kg ?? tipoVig(x.tipo_id)?.precio_kg ?? ''}" inputmode="decimal"></label>` : ''}
     <label class="f"><span>HH estimadas</span><input type="number" class="it-h" step="any" min="0" value="${x.ppto_horas ?? ''}" inputmode="decimal" placeholder="opcional"></label></div></div>`;
 function leerItems() {
   return [...document.querySelectorAll('#ot-items .it')].map((el, i) => ({id: +el.dataset.iid || null, nombre: el.querySelector('.it-n').value.trim(), unidad: el.querySelector('.it-u').value,
     cantidad: +el.querySelector('.it-q').value || 0, kg: el.querySelector('.it-k').value === '' ? null : +el.querySelector('.it-k').value, orden: i,
-    tipo_id: +el.querySelector('.it-t').value || null, ppto_horas: el.querySelector('.it-h').value === '' ? null : +el.querySelector('.it-h').value}));
+    tipo_id: +el.querySelector('.it-t').value || null,
+    costo_kg: el.querySelector('.it-ck') ? (el.querySelector('.it-ck').value === '' ? null : +el.querySelector('.it-ck').value) : (tipoVig(+el.querySelector('.it-t').value || null)?.costo_kg ?? null),
+    precio_kg: el.querySelector('.it-pk') ? (el.querySelector('.it-pk').value === '' ? null : +el.querySelector('.it-pk').value) : (tipoVig(+el.querySelector('.it-t').value || null)?.precio_kg ?? null), ppto_horas: el.querySelector('.it-h').value === '' ? null : +el.querySelector('.it-h').value}));
 }
 // Reparto del costo real de la OT entre sus ítems: por HH estimadas si todos las tienen; si no, por kg.
-const estItem = x => { const t = byId(S.d.tipos_item, x.tipo_id); return t && t.costo_kg != null && x.kg > 0 ? +x.kg * +t.costo_kg * (1 + cfg('gg_pct') / 100) : null; };
+const estItem = x => { const ck = x.costo_kg != null ? x.costo_kg : byId(S.d.tipos_item, x.tipo_id)?.costo_kg; return ck != null && x.kg > 0 ? +x.kg * +ck * (1 + cfg('gg_pct') / 100) : null; };
 function costoItems(o, c) {
   const it = S.d.ot_items.filter(x => x.ot_id === o.id).sort((a, b) => (a.orden || 0) - (b.orden || 0) || a.id - b.id); if (!it.length) return [];
   const porTipo = it.every(x => estItem(x) != null), porHH = !porTipo && it.every(x => +x.ppto_horas > 0), w = x => porTipo ? estItem(x) : porHH ? +x.ppto_horas : (+x.kg || 0), W = sum(it, w);
@@ -1705,6 +1720,13 @@ function tarifaAuto() {
   ['c-sueldo_mes', 'c-horas_mes', 'c-mult_extra', 'c-costo_hh', 'c-costo_hh_extra'].forEach(id => g(id)?.addEventListener('input', recalc));
   recalc();
 }
+function histTipoHtml(id) {
+  const h = S.d.tipos_item_hist.filter(x => x.tipo_id === id).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+  return `<div class="card" style="box-shadow:none;margin:12px 0"><div class="label">Historial de costo y precio por kg</div>
+    <p class="small muted">Al cambiar el costo o el precio y guardar, queda un registro con la fecha de hoy. Las OT ya creadas conservan el valor que tenían.</p>
+    ${h.length ? `<div class="tbl-wrap"><table><thead><tr><th>Desde</th><th class="n">Costo/kg</th><th class="n">Venta/kg</th><th class="n">Cambio costo</th></tr></thead><tbody>${h.map((x, i) => { const prev = h[i + 1], d = prev && +prev.costo_kg ? (x.costo_kg - prev.costo_kg) / prev.costo_kg * 100 : null;
+      return `<tr><td>${fechaTxt(x.fecha)}</td><td class="n">${x.costo_kg != null ? clp(x.costo_kg) : '—'}</td><td class="n">${x.precio_kg != null ? clp(x.precio_kg) : '—'}</td><td class="n">${d == null ? '' : (d >= 0 ? '+' : '') + num(d, 1) + '%'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Sin historial todavía.</div>'}</div>`;
+}
 function sheetCat(k, id) {
   const c = CAT[k], r = id != null ? S.d[c.t].find(x => String(x[c.key || 'id']) === String(id)) : {};
   const nuevoTrab = k === 'trabajadores' && id == null;
@@ -1714,6 +1736,7 @@ function sheetCat(k, id) {
       : ty === 'sel' ? `<label class="f"><span>${l}</span><select name="${f}" id="c-${f}">${opts().map(([v, t]) => `<option value="${esc(v)}" ${String(r[f] ?? '') === String(v) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`
       : ty === 'list' ? `<label class="f"><span>${l}</span><input type="text" name="${f}" id="c-${f}" list="c-${f}-l" value="${esc(r[f] ?? '')}"><datalist id="c-${f}-l">${opts().map(v => `<option value="${esc(v)}">`).join('')}</datalist></label>`
       : `<label class="f"><span>${l}</span><input type="${ty === 'num' ? 'number' : ty}" ${ty === 'num' ? 'step="any"' : ''} name="${f}" id="c-${f}" value="${esc(r[f] ?? '')}" ${['nombre', 'fecha', 'unidad'].includes(f) ? 'required' : ''}></label>`).join('')}
+    ${k === 'tipos' && id != null ? histTipoHtml(+id) : ''}
     ${k === 'tarifas' ? '<p class="small" id="t-calc" style="min-height:1.2em"></p>' : ''}
     ${nuevoTrab ? `<div class="fgrid"><label class="f"><span>Usuario para entrar</span><input type="text" name="usuario" id="c-usuario" required autocapitalize="off" placeholder="jperez"></label>
       <label class="f"><span>Clave inicial (mínimo 6)</span><input type="text" name="clave" id="c-clave" minlength="6" required></label></div>
@@ -1969,9 +1992,9 @@ const FORMS = {
       const viejos = id ? S.d.ot_items.filter(x => x.ot_id === o.id) : [], quedan = new Set(its.filter(x => x.id).map(x => x.id));
       for (const x of viejos) if (!quedan.has(x.id)) await DB.del('ot_items', x.id);
       for (const x of its) {
-        const r = {nombre: x.nombre, unidad: x.unidad, cantidad: x.cantidad, kg: x.kg, orden: x.orden, tipo_id: x.tipo_id, ppto_horas: x.ppto_horas}, ant = x.id && viejos.find(y => y.id === x.id);
+        const r = {nombre: x.nombre, unidad: x.unidad, cantidad: x.cantidad, kg: x.kg, orden: x.orden, tipo_id: x.tipo_id, ppto_horas: x.ppto_horas, costo_kg: x.costo_kg, precio_kg: x.precio_kg}, ant = x.id && viejos.find(y => y.id === x.id);
         if (!x.id) await DB.ins('ot_items', {ot_id: o.id, ...r});
-        else if (ant && ['nombre', 'unidad', 'cantidad', 'kg', 'orden', 'tipo_id', 'ppto_horas'].some(k => String(ant[k] ?? '') !== String(r[k] ?? ''))) await DB.upd('ot_items', x.id, r);
+        else if (ant && ['nombre', 'unidad', 'cantidad', 'kg', 'orden', 'tipo_id', 'ppto_horas', 'costo_kg', 'precio_kg'].some(k => String(ant[k] ?? '') !== String(r[k] ?? ''))) await DB.upd('ot_items', x.id, r);
       }
       const od = S.ui.otDoc; S.ui.otDoc = null;
       if (!id && od && od.file) { try { await guardarDoc(od.file, {ot_id: o.id, tipo: od.tipo, nota: 'Documento de la OT (leído con IA)'}); } catch (e) { toast('OT creada, pero no se pudo guardar el documento: ' + errTxt(e)); } }
