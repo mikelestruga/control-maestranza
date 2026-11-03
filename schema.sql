@@ -832,6 +832,20 @@ revoke all on maquina_uso, maquina_uso_costo from anon, authenticated;
 grant select, insert, update, delete on maquina_uso to authenticated;
 grant select on maquina_uso_costo to authenticated;
 
+-- ---------- Tipos de trabajo de los ítems (cañería, estructura, estanque…) ----
+create table if not exists tipos_item (
+  id bigint generated always as identity primary key,
+  nombre text not null unique,
+  activa boolean not null default true
+);
+alter table tipos_item enable row level security;
+drop policy if exists ti_leer on tipos_item; drop policy if exists ti_esc on tipos_item;
+create policy ti_leer on tipos_item for select to authenticated using (mi_rol() is not null);
+create policy ti_esc  on tipos_item for all to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
+revoke all on tipos_item from anon, authenticated;
+grant select, insert, update, delete on tipos_item to authenticated;
+insert into tipos_item (nombre) values ('Cañería'), ('Estructura'), ('Estanque'), ('Mecanizado'), ('Otro') on conflict (nombre) do nothing;
+
 -- ---------- Ítems de cada OT (nombre, unidad piezas/metros, cantidad y kg) ----
 create table if not exists ot_items (
   id bigint generated always as identity primary key,
@@ -840,7 +854,9 @@ create table if not exists ot_items (
   unidad text not null default 'pza' check (unidad in ('pza','m')),
   cantidad numeric not null check (cantidad > 0),
   kg numeric check (kg >= 0),
-  orden int not null default 0
+  orden int not null default 0,
+  tipo_id bigint references tipos_item(id),
+  ppto_horas numeric check (ppto_horas >= 0)
 );
 create index if not exists ot_items_ot on ot_items (ot_id);
 alter table ot_items enable row level security;
@@ -882,7 +898,7 @@ begin
   if t = 'ots' then x := coalesce(r->>'numero','') || ' · ' || coalesce(r->>'cliente','');
   elsif t = 'ot_ppto' then x := 'Cotización de ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), 'OT');
   elsif t = 'materiales' then x := coalesce(r->>'nombre','') || coalesce(' (' || (r->>'grupo') || ')', '');
-  elsif t in ('tarifas','maquinas','procesos','operaciones') then x := r->>'nombre';
+  elsif t in ('tarifas','maquinas','procesos','operaciones','tipos_item') then x := r->>'nombre';
   elsif t = 'dias_especiales' then x := coalesce(r->>'fecha','') || ' ' || coalesce(r->>'descripcion','');
   elsif t = 'config' then x := r->>'clave';
   elsif t = 'perfiles' then x := coalesce(r->>'nombre','') || ' (' || coalesce(r->>'usuario','') || ')';
@@ -939,7 +955,7 @@ begin
     when 'compras' then 'Compras y documentos' when 'documentos' then 'Compras y documentos'
     when 'servicios' then 'Pintura y servicios'
     when 'maquina_uso' then 'Máquinas'
-    when 'tarifas' then 'Costos y tarifas' when 'maquinas' then 'Costos y tarifas' when 'procesos' then 'Costos y tarifas'
+    when 'tarifas' then 'Costos y tarifas' when 'maquinas' then 'Costos y tarifas' when 'procesos' then 'Costos y tarifas' when 'tipos_item' then 'Costos y tarifas'
     when 'perfiles' then 'Trabajadores'
     else 'Plataforma' end;
   -- el primer cambio sobre un usuario recién creado se anota como "alta" del trabajador
@@ -954,7 +970,7 @@ begin
 end $$;
 
 do $$ declare x record; begin
-  for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('ot_items','todo'),('maquina_uso','todo'),('hh_registros','cambios'),('asistencia','cambios'),
+  for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('ot_items','todo'),('tipos_item','todo'),('maquina_uso','todo'),('hh_registros','cambios'),('asistencia','cambios'),
       ('materiales','todo'),('consumos','cambios'),('stock_ingresos','todo'),('ot_stock','cambios'),('compras','todo'),('documentos','todo'),
       ('servicios','cambios'),('tarifas','todo'),('maquinas','todo'),('procesos','todo'),('perfiles','cambios'),('config','todo'),
       ('operaciones','todo'),('dias_especiales','todo')) as v(t, m)

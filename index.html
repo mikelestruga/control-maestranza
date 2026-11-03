@@ -234,7 +234,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: [], tipos_item: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -272,12 +272,12 @@ const pesoTxt = b => !b ? '' : b > 1048576 ? num(b / 1048576, 1) + ' MB' : num(b
 
 /* ---------------------------------------------------------------- registro de cambios (auditoría) */
 const AUD = {
-  seccion: {ots: 'Órdenes de trabajo', ot_items: 'Órdenes de trabajo', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
+  seccion: {ots: 'Órdenes de trabajo', ot_items: 'Órdenes de trabajo', tipos_item: 'Costos y tarifas', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
     materiales: 'Materiales', consumos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', documentos: 'Compras y documentos',
     servicios: 'Pintura y servicios', maquina_uso: 'Máquinas', tarifas: 'Costos y tarifas', maquinas: 'Costos y tarifas', procesos: 'Costos y tarifas', perfiles: 'Trabajadores'},
-  modo: {ots: 'todo', ot_items: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
+  modo: {ots: 'todo', ot_items: 'todo', tipos_item: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
     compras: 'todo', documentos: 'todo', maquina_uso: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
-  nombre: {ots: 'OT', ot_items: 'ítem de OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
+  nombre: {ots: 'OT', tipos_item: 'tipo de trabajo', ot_items: 'ítem de OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
     stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', documentos: 'documento', servicios: 'servicio', maquina_uso: 'horas de máquina', tarifas: 'tarifa HH', maquinas: 'máquina',
     procesos: 'proceso propio', perfiles: 'trabajador', config: 'parámetro', operaciones: 'operación', dias_especiales: 'feriado'},
   agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock', 'maquina_uso', 'ot_items'],
@@ -286,7 +286,7 @@ const AUD = {
     estado: 'Estado', cantidad: 'Cantidad', kg: 'Kg', kg_unidad: 'Kg por unidad', cliente: 'Cliente', numero: 'Número', descripcion: 'Descripción', unidad: 'Unidad', grupo: 'Grupo',
     horas: 'Horas', horas_extra: 'Horas extra', estimada: 'Estimado', sueldo_mes: 'Sueldo del mes', horas_mes: 'Horas del mes', maquina_id: 'Máquina', mult_extra: 'Multiplicador hora extra', costo_estimado: 'Costo estimado', estado_costo: 'Tipo de costo', proveedor: 'Proveedor', fecha: 'Fecha', tipo: 'Tipo',
     codigo: 'Código', usuario: 'Usuario', tarifa_id: 'Tarifa', valor: 'Valor', clave: 'Parámetro', neto: 'Neto', terminadas: 'Terminadas', kg_cotizados: 'Kg cotizados', kg_producidos: 'Kg producidos',
-    fecha_entrega: 'Entrega', ppto_horas: 'HH cotizadas', ot_id: 'OT', doc_ref: 'Documento', nota: 'Nota', inicio: 'Inicio', fin: 'Término', piezas: 'Piezas'}
+    fecha_entrega: 'Entrega', ppto_horas: 'HH cotizadas', tipo_id: 'Tipo de trabajo', ot_id: 'OT', doc_ref: 'Documento', nota: 'Nota', inicio: 'Inicio', fin: 'Término', piezas: 'Piezas'}
 };
 function audDet(t, r) {
   const o = id => T_.ots.find(x => x.id === id)?.numero || '?';
@@ -294,7 +294,7 @@ function audDet(t, r) {
     case 'ots': return `${r.numero} · ${r.cliente || ''}`;
     case 'ot_ppto': return 'Cotización de ' + o(r.ot_id);
     case 'materiales': return r.nombre + (r.grupo ? ` (${r.grupo})` : '');
-    case 'tarifas': case 'maquinas': case 'procesos': case 'operaciones': return r.nombre;
+    case 'tarifas': case 'maquinas': case 'procesos': case 'operaciones': case 'tipos_item': return r.nombre;
     case 'dias_especiales': return `${r.fecha} ${r.descripcion || ''}`;
     case 'config': return r.clave;
     case 'perfiles': return `${r.nombre} (${r.usuario || ''})`;
@@ -350,6 +350,7 @@ const Demo = (() => {
     perfiles: () => ({rol: 'operario', activo: true}),
     maquinas: () => ({activa: true, estimada: false, costo_hh: 0}),
     operaciones: () => ({activa: true}),
+    tipos_item: () => ({activa: true}),
     procesos: () => ({estimada: false, tipo: 'otro'}),
     tarifas: () => ({estimada: false})
   };
@@ -435,7 +436,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 11) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 12) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -481,7 +482,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 11, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 12, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -502,6 +503,7 @@ const Demo = (() => {
       {id: 'p4', nombre: 'Raúl Díaz', usuario: 'rdiaz', tarifa_id: T_('Mecánico')},
       {id: 'p5', nombre: 'Diego Fuentes', usuario: 'dfuentes', tarifa_id: T_('Ayudante')},
       {id: 'p6', nombre: 'Mario Pérez', usuario: 'mperez', tarifa_id: T_('Pintor')}]);
+    const tip = add('tipos_item', ['Cañería', 'Estructura', 'Estanque', 'Mecanizado', 'Otro'].map(nombre => ({nombre})));
     const ops = add('operaciones', ['Corte', 'Trazado', 'Armado', 'Soldadura', 'Mecanizado', 'Pintura', 'Tratamiento térmico', 'Montaje', 'Control de calidad', 'Otro'].map(nombre => ({nombre})));
     const O = n => ops.find(x => x.nombre === n).id;
     const mq = add('maquinas', [{nombre: 'Torno CNC', costo_hh: 9000}, {nombre: 'Fresadora', costo_hh: 7000}, {nombre: 'Equipo arco sumergido', costo_hh: 4500, estimada: true}, {nombre: 'Oxicorte / plasma', costo_hh: 3500}]);
@@ -530,7 +532,7 @@ const Demo = (() => {
       {numero: 'OT-2617', cliente: 'Fundición ejemplo', descripcion: 'Ejes SAE 4140 mecanizados y bonificados', cantidad: 12, kg_cotizados: 150, unidad: 'eje', fecha_entrega: addDays(today, 14), ppto_horas: 95, creada: wd[1]},
       {numero: 'OT-2609', cliente: 'Minera ejemplo', descripcion: 'Soportes de cañería galvanizados', cantidad: 60, kg_cotizados: 720, unidad: 'pza', estado: 'terminada', fecha_entrega: wd[5], ppto_horas: 50, creada: addDays(today, -20)},
       {numero: 'OT-2620', cliente: 'Planta ejemplo', descripcion: 'Estanque 5 m³ acero carbono (cotizado, sin iniciar)', cantidad: 1, kg_cotizados: 2400, unidad: 'pza', estado: 'cotizada', ppto_horas: 120, creada: today}]);
-    ots.forEach(o => T.ot_items.push({id: nid('ot_items'), ot_id: o.id, nombre: o.descripcion, unidad: /^(m|mt|mts|metro|metros)$/i.test(o.unidad) ? 'm' : 'pza', cantidad: o.cantidad, kg: o.kg_cotizados, orden: 0}));
+    ots.forEach(o => T.ot_items.push({id: nid('ot_items'), ot_id: o.id, nombre: o.descripcion, unidad: /^(m|mt|mts|metro|metros)$/i.test(o.unidad) ? 'm' : 'pza', cantidad: o.cantidad, kg: o.kg_cotizados, orden: 0, ppto_horas: o.ppto_horas, tipo_id: tip[/cañer|spool|soporte/i.test(o.descripcion) ? 0 : /estanque/i.test(o.descripcion) ? 2 : /eje|mecaniz/i.test(o.descripcion) ? 3 : 1].id}));
     T.ot_ppto.push({ot_id: ots[0].id, ppto_hh: 1450000, ppto_material: 6400000, ppto_servicios: 1250000, ppto_maquina: 120000, precio_venta: 12800000},
       {ot_id: ots[1].id, ppto_hh: 780000, ppto_material: 1900000, ppto_servicios: 380000, ppto_maquina: 0, precio_venta: 4600000},
       {ot_id: ots[2].id, ppto_hh: 720000, ppto_material: 1100000, ppto_servicios: 420000, ppto_maquina: 380000, precio_venta: 3900000},
@@ -619,8 +621,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items'];
-      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items']; // toleran que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item'];
+      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item']; // toleran que falte la migración
       const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
@@ -1080,7 +1082,7 @@ function vOTDetalle() {
     return `<div class="card"><div class="row between"><h3>Stock del proyecto</h3><button class="btn" data-act="go-stockot" data-id="${o.id}">Ver stock y salidas</button></div>
       <div class="row" style="gap:28px">${adm ? `<div><div class="label">Comprado con OC</div><div class="pill-n">${clp(r.comprado)}</div></div><div><div class="label">Cargado a la OT</div><div class="pill-n">${clp(r.entregado)}</div></div><div><div class="label">Saldo sin usar</div><div class="pill-n">${clp(r.saldo)}</div></div>` : ''}
         <div><div class="label">Saldo en kg</div><div class="pill-n">${kg(r.kgSaldo)}</div></div><div><div class="label">Líneas con saldo</div><div class="pill-n">${r.conSaldo} de ${r.ls.length}</div></div></div></div>`; })()}
-  ${vItemsOT(o)}
+  ${vItemsOT(o, c, adm)}
   ${vMaquinasOT(o, c, adm)}
   ${vDocsOT(o)}
   <div class="grid2">
@@ -1188,19 +1190,31 @@ const itemHtml = (x = {}) => `<div class="it card" data-iid="${x.id || ''}" styl
   <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="text" class="it-n" placeholder="Nombre del ítem" value="${esc(x.nombre || '')}" style="flex:1;min-width:0" aria-label="Nombre del ítem">
     <button type="button" class="x" data-act="it-del" aria-label="Quitar ítem">✕</button></div>
   <div class="fgrid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,110px),1fr))">
+    <label class="f"><span>Tipo de trabajo</span><select class="it-t"><option value="">Sin tipo</option>${S.d.tipos_item.filter(t => t.activa || t.id === x.tipo_id).map(t => `<option value="${t.id}" ${t.id === x.tipo_id ? 'selected' : ''}>${esc(t.nombre)}</option>`).join('')}</select></label>
     <label class="f"><span>Se mide en</span><select class="it-u"><option value="pza" ${x.unidad === 'm' ? '' : 'selected'}>Piezas</option><option value="m" ${x.unidad === 'm' ? 'selected' : ''}>Metros</option></select></label>
     <label class="f"><span>Cantidad total</span><input type="number" class="it-q" step="any" min="0" value="${x.cantidad ?? ''}" inputmode="decimal"></label>
-    <label class="f"><span>Kg del ítem</span><input type="number" class="it-k" step="any" min="0" value="${x.kg ?? ''}" inputmode="decimal"></label></div></div>`;
+    <label class="f"><span>Kg del ítem</span><input type="number" class="it-k" step="any" min="0" value="${x.kg ?? ''}" inputmode="decimal"></label>
+    <label class="f"><span>HH estimadas</span><input type="number" class="it-h" step="any" min="0" value="${x.ppto_horas ?? ''}" inputmode="decimal" placeholder="opcional"></label></div></div>`;
 function leerItems() {
   return [...document.querySelectorAll('#ot-items .it')].map((el, i) => ({id: +el.dataset.iid || null, nombre: el.querySelector('.it-n').value.trim(), unidad: el.querySelector('.it-u').value,
-    cantidad: +el.querySelector('.it-q').value || 0, kg: el.querySelector('.it-k').value === '' ? null : +el.querySelector('.it-k').value, orden: i}));
+    cantidad: +el.querySelector('.it-q').value || 0, kg: el.querySelector('.it-k').value === '' ? null : +el.querySelector('.it-k').value, orden: i,
+    tipo_id: +el.querySelector('.it-t').value || null, ppto_horas: el.querySelector('.it-h').value === '' ? null : +el.querySelector('.it-h').value}));
 }
-function vItemsOT(o) {
-  const it = itemsOT(o); if (!o.id || !S.d.ot_items.some(x => x.ot_id === o.id)) return '';
-  const kgT = sum(it, x => x.kg);
-  return `<div class="card"><h3>Ítems de la OT</h3><div class="tbl-wrap"><table><thead><tr><th>Ítem</th><th class="n">Cantidad</th><th class="n">Kg</th></tr></thead><tbody>
-    ${it.map(x => `<tr><td style="white-space:normal">${esc(x.nombre)}</td><td class="n">${num(x.cantidad, 2)} ${x.unidad === 'm' ? 'm' : 'pza'}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td><strong>Total</strong></td><td class="n"></td><td class="n"><strong>${num(kgT, 1)}</strong></td></tr></tfoot></table></div></div>`;
+// Reparto del costo real de la OT entre sus ítems: por HH estimadas si todos las tienen; si no, por kg.
+function costoItems(o, c) {
+  const it = S.d.ot_items.filter(x => x.ot_id === o.id).sort((a, b) => (a.orden || 0) - (b.orden || 0) || a.id - b.id); if (!it.length) return [];
+  const porHH = it.every(x => +x.ppto_horas > 0), w = x => porHH ? +x.ppto_horas : (+x.kg || 0), W = sum(it, w);
+  return it.map(x => { const sh = W ? w(x) / W : 1 / it.length;
+    return {...x, share: sh, costo: c.total * sh, pptoC: (c.pTotal || 0) * sh, venta: c.p?.precio_venta ? +c.p.precio_venta * sh : null, porHH}; });
+}
+function vItemsOT(o, c, adm) {
+  if (!o.id || !S.d.ot_items.some(x => x.ot_id === o.id)) return '';
+  const it = costoItems(o, c), kgT = sum(it, x => x.kg), tn = x => byId(S.d.tipos_item, x.tipo_id)?.nombre || 'Sin tipo', ck = (v, k) => k > 0 ? clp(v / k) : '—';
+  return `<div class="card"><h3>Ítems de la OT</h3><div class="tbl-wrap"><table><thead><tr><th>Ítem</th><th class="n">Cantidad</th><th class="n">Kg</th>${adm ? '<th class="n">Costo real</th><th class="n">Costo/kg</th><th class="n">Venta/kg</th>' : ''}</tr></thead><tbody>
+    ${it.map(x => `<tr><td style="white-space:normal">${esc(x.nombre)}<div class="tiny muted">${esc(tn(x))}${+x.ppto_horas ? ` · ${num(x.ppto_horas, 1)} HH est.` : ''}</div></td><td class="n">${num(x.cantidad, 2)} ${x.unidad === 'm' ? 'm' : 'pza'}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td>
+      ${adm ? `<td class="n">${clp(x.costo)}</td><td class="n">${ck(x.costo, x.kg)}</td><td class="n">${x.venta != null ? ck(x.venta, x.kg) : '—'}</td>` : ''}</tr>`).join('')}</tbody>
+    <tfoot><tr><td><strong>Total</strong></td><td class="n"></td><td class="n"><strong>${num(kgT, 1)}</strong></td>${adm ? `<td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${ck(c.total, kgT)}</td><td class="n"></td>` : ''}</tr></tfoot></table></div>
+    ${adm ? `<p class="small muted">El costo real de la OT se reparte entre los ítems ${it[0].porHH ? 'según sus HH estimadas' : 'según sus kg (completa las HH estimadas de cada ítem para un reparto más justo)'}. Es una estimación hasta que las horas se registren por ítem.</p>` : ''}</div>`;
 }
 
 /* ---------------- SERVICIOS */
@@ -1612,6 +1626,13 @@ function vReportes() {
       <div class="tbl-wrap"><table><thead><tr><th>Grupo o material</th><th class="n">Salidas</th><th class="n">Cantidad</th><th class="n">Kg</th><th class="n">Costo</th><th class="n">Promedio</th></tr></thead><tbody>
       ${rows.map(([k, e]) => `<tr><td style="white-space:normal">${esc(k)}</td><td class="n">${e.n}</td><td class="n">${e.u.size === 1 ? `${num(e.cant, 2)} ${esc([...e.u][0] || '')}` : 'varias unidades'}</td><td class="n">${e.kg ? num(e.kg, 0) : '—'}</td><td class="n">${clp(e.total)}</td><td class="n">${e.u.size === 1 && e.cant ? clp(e.total / e.cant) + '/' + esc([...e.u][0] || '') : '—'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Sin salidas en el período.</td></tr>'}
       </tbody></table></div></div>`; })()}
+  ${(() => { const por = {};
+    S.d.ots.filter(o => o.estado === 'terminada' || o.estado === 'entregada').forEach(o => { const c = costOT(o); costoItems(o, c).forEach(x => { const t = byId(S.d.tipos_item, x.tipo_id)?.nombre || 'Sin tipo', e = por[t] = por[t] || {kg: 0, costo: 0, venta: 0, vk: 0, n: new Set()}; e.n.add(o.id);
+      if (x.kg > 0) { e.kg += +x.kg; e.costo += x.costo; if (x.venta != null) { e.venta += x.venta; e.vk += +x.kg; } } }); });
+    const f = Object.entries(por).filter(([, e]) => e.kg > 0).sort((a, b) => b[1].kg - a[1].kg);
+    return `<div class="card"><h2>Costo por kg según tipo de trabajo</h2><p class="small muted">Solo OT terminadas o entregadas. El costo de cada OT se reparte entre sus ítems (ver cada OT).</p>
+      ${f.length ? `<div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th class="n">OT</th><th class="n">Kg</th><th class="n">Costo/kg</th><th class="n">Venta/kg</th><th class="n">Margen</th></tr></thead><tbody>
+      ${f.map(([t, e]) => { const ckg = e.costo / e.kg, vkg = e.vk ? e.venta / e.vk : null; return `<tr><td>${esc(t)}</td><td class="n">${e.n.size}</td><td class="n">${kg(e.kg)}</td><td class="n">${clp(ckg)}</td><td class="n">${vkg != null ? clp(vkg) : '—'}</td><td class="n">${vkg != null ? pct((vkg - ckg) / vkg * 100) : '—'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Aún no hay OT terminadas con ítems y kg.</div>'}</div>`; })()}
   <div class="card"><div class="row between"><h2>Costo por OT</h2><button class="btn" data-act="csv-ots">Exportar para el ERP</button></div>
     <div class="tbl-wrap"><table><thead><tr><th>OT</th><th>Cliente</th><th>Estado</th><th class="n">HH</th><th class="n">M. obra</th><th class="n">Máquinas</th><th class="n">Materiales</th><th class="n">Servicios</th><th class="n">GG</th><th class="n">Total</th><th class="n">Cotizado</th><th class="n">Venta</th><th class="n">Margen</th><th class="n">Kg cotiz.</th><th class="n">Kg material</th><th class="n">Kg prod.</th><th class="n">Rend.</th><th class="n">$/kg proy.</th><th class="n">$/kg cotiz.</th></tr></thead><tbody>
     ${S.d.ots.map(o => { const c = costOT(o); return `<tr class="click" data-act="ot-open" data-id="${o.id}"><td><span class="ot">${esc(o.numero)}</span></td><td>${esc(o.cliente)}</td><td>${ESTADOS_OT[o.estado]}</td><td class="n">${num(c.horas)}</td><td class="n">${clp(c.mo + c.extra)}</td><td class="n">${clp(c.maq)}</td><td class="n">${clp(c.mat)}</td><td class="n">${clp(c.serv)}</td><td class="n">${clp(c.gg)}</td><td class="n"><strong>${clp(c.total)}</strong></td><td class="n">${clp(c.pTotal)}</td><td class="n">${clp(c.p?.precio_venta)}</td><td class="n" style="color:${(c.margen || 0) < 0 ? 'var(--bad)' : 'inherit'}">${c.margen == null ? '—' : clp(c.margen)}</td><td class="n">${c.kgCot ? num(c.kgCot, 0) : '—'}</td><td class="n">${num(c.kgMat, 0)}</td><td class="n">${num(c.kgProd, 0)}</td><td class="n">${c.rend != null ? pct(c.rend * 100) : '—'}</td><td class="n">${c.proyKg ? clp(c.proyKg) : '—'}</td><td class="n">${c.pptoKg ? clp(c.pptoKg) : '—'}</td></tr>`; }).join('')}
@@ -1639,9 +1660,10 @@ const CAT = {
     fields: [['nombre', 'Nombre', 'text'], ['costo_hh', 'Costo hora $', 'num'], ['estimada', 'Valor estimado', 'bool'], ['activa', 'Activa', 'bool']],
     cols: [['nombre', 'Máquina'], [r => clp(r.costo_hh) + (r.estimada ? ' <span class="chip est">est.</span>' : ''), 'Costo hora', 'n'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
   operaciones: {t: 'operaciones', title: 'Operaciones', fields: [['nombre', 'Nombre', 'text'], ['activa', 'Activa', 'bool']], cols: [['nombre', 'Operación'], [r => r.activa ? 'Sí' : 'No', 'Activa']]},
+  tipos: {t: 'tipos_item', title: 'Tipos de trabajo', help: 'Cada ítem de una OT lleva un tipo (ej.: Cañería, Estructura, Estanque). Los reportes muestran el costo y el precio por kg de cada tipo, porque un kg de cañería no cuesta lo mismo que un kg de estructura.', fields: [['nombre', 'Nombre', 'text'], ['activa', 'Activo', 'bool']], cols: [['nombre', 'Tipo'], [r => r.activa ? 'Sí' : 'No', 'Activo']]},
   dias: {t: 'dias_especiales', key: 'fecha', title: 'Feriados', help: 'En estos días (y los domingos) todas las horas cuentan como extra.', fields: [['fecha', 'Fecha', 'date'], ['descripcion', 'Descripción', 'text']], cols: [[r => fechaTxt(r.fecha), 'Fecha'], ['descripcion', 'Descripción']]}
 };
-const AJ_GERENCIA = ['trabajadores', 'tarifas', 'materiales', 'procesos', 'maquinas'];   // lo demás es de la plataforma: solo administrador
+const AJ_GERENCIA = ['trabajadores', 'tarifas', 'materiales', 'procesos', 'maquinas', 'tipos'];   // lo demás es de la plataforma: solo administrador
 function vAjustes() {
   const ok = kk => isAdmin() || AJ_GERENCIA.includes(kk);
   if (!ok(S.ui.ajTab)) S.ui.ajTab = 'trabajadores';
@@ -1944,9 +1966,9 @@ const FORMS = {
       const viejos = id ? S.d.ot_items.filter(x => x.ot_id === o.id) : [], quedan = new Set(its.filter(x => x.id).map(x => x.id));
       for (const x of viejos) if (!quedan.has(x.id)) await DB.del('ot_items', x.id);
       for (const x of its) {
-        const r = {nombre: x.nombre, unidad: x.unidad, cantidad: x.cantidad, kg: x.kg, orden: x.orden}, ant = x.id && viejos.find(y => y.id === x.id);
+        const r = {nombre: x.nombre, unidad: x.unidad, cantidad: x.cantidad, kg: x.kg, orden: x.orden, tipo_id: x.tipo_id, ppto_horas: x.ppto_horas}, ant = x.id && viejos.find(y => y.id === x.id);
         if (!x.id) await DB.ins('ot_items', {ot_id: o.id, ...r});
-        else if (ant && ['nombre', 'unidad', 'cantidad', 'kg', 'orden'].some(k => String(ant[k] ?? '') !== String(r[k] ?? ''))) await DB.upd('ot_items', x.id, r);
+        else if (ant && ['nombre', 'unidad', 'cantidad', 'kg', 'orden', 'tipo_id', 'ppto_horas'].some(k => String(ant[k] ?? '') !== String(r[k] ?? ''))) await DB.upd('ot_items', x.id, r);
       }
       const od = S.ui.otDoc; S.ui.otDoc = null;
       if (!id && od && od.file) { try { await guardarDoc(od.file, {ot_id: o.id, tipo: od.tipo, nota: 'Documento de la OT (leído con IA)'}); } catch (e) { toast('OT creada, pero no se pudo guardar el documento: ' + errTxt(e)); } }
