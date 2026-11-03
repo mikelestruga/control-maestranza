@@ -234,7 +234,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -272,15 +272,15 @@ const pesoTxt = b => !b ? '' : b > 1048576 ? num(b / 1048576, 1) + ' MB' : num(b
 
 /* ---------------------------------------------------------------- registro de cambios (auditoría) */
 const AUD = {
-  seccion: {ots: 'Órdenes de trabajo', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
+  seccion: {ots: 'Órdenes de trabajo', ot_items: 'Órdenes de trabajo', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
     materiales: 'Materiales', consumos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', documentos: 'Compras y documentos',
     servicios: 'Pintura y servicios', maquina_uso: 'Máquinas', tarifas: 'Costos y tarifas', maquinas: 'Costos y tarifas', procesos: 'Costos y tarifas', perfiles: 'Trabajadores'},
-  modo: {ots: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
+  modo: {ots: 'todo', ot_items: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
     compras: 'todo', documentos: 'todo', maquina_uso: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
-  nombre: {ots: 'OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
+  nombre: {ots: 'OT', ot_items: 'ítem de OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
     stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', documentos: 'documento', servicios: 'servicio', maquina_uso: 'horas de máquina', tarifas: 'tarifa HH', maquinas: 'máquina',
     procesos: 'proceso propio', perfiles: 'trabajador', config: 'parámetro', operaciones: 'operación', dias_especiales: 'feriado'},
-  agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock', 'maquina_uso'],
+  agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock', 'maquina_uso', 'ot_items'],
   col: {costo_unit: 'Costo unitario', costo_hh: 'Costo hora', costo_hh_extra: 'Costo hora extra', precio_venta: 'Precio de venta', ppto_hh: 'Mano de obra cotizada', ppto_material: 'Materiales cotizados',
     ppto_servicios: 'Servicios cotizados', ppto_maquina: 'Máquinas cotizadas', stock: 'Stock', stock_min: 'Stock mínimo', nombre: 'Nombre', rol: 'Rol', activo: 'Activo', activa: 'Activa',
     estado: 'Estado', cantidad: 'Cantidad', kg: 'Kg', kg_unidad: 'Kg por unidad', cliente: 'Cliente', numero: 'Número', descripcion: 'Descripción', unidad: 'Unidad', grupo: 'Grupo',
@@ -305,6 +305,7 @@ function audDet(t, r) {
     case 'compras': return `${r.numero || 's/n'} · ${r.proveedor || ''} · OT ${o(r.ot_id)}`;
     case 'documentos': return `${r.nombre} · OT ${o(r.ot_id)}`;
     case 'produccion': return `OT ${o(r.ot_id)} · ${r.kg} kg`;
+    case 'ot_items': return `${r.nombre} · ${r.cantidad} ${r.unidad === 'm' ? 'm' : 'pza'}${r.kg != null ? ' · ' + r.kg + ' kg' : ''} · OT ${o(r.ot_id)}`;
     case 'maquina_uso': return `${T_.maquinas.find(x => x.id === r.maquina_id)?.nombre || '?'} · ${r.horas} h · OT ${o(r.ot_id)}`;
     default: return String(r.id ?? '');
   }
@@ -434,7 +435,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 10) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 11) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -461,7 +462,7 @@ const Demo = (() => {
     },
     async subirDoc(file, otId) { const path = `demo/ot-${otId}/${Date.now()}-${limpiarNombre(file.name)}`; demoArchivos.set(path, URL.createObjectURL(file)); return path; },
     async urlDoc(path) { return demoArchivos.get(path) || null; },
-    async leerOT() { await new Promise(r => setTimeout(r, 900)); return {numero: 'OT-2650', cliente: 'Minera Ejemplo S.A.', descripcion: 'Fabricación de 8 spools de cañería 6 pulg A106', cantidad: 8, unidad: 'spool', kg_cotizados: 3200, fecha_entrega: addDays(hoy(), 21), ppto_horas: 260, precio_venta: 9800000, tipo_documento: 'orden_compra', advertencias: ['Ejemplo de demostración: en la app real se lee tu documento.']}; },
+    async leerOT() { await new Promise(r => setTimeout(r, 900)); return {numero: 'OT-2650', cliente: 'Minera Ejemplo S.A.', descripcion: 'Fabricación de 8 spools de cañería 6 pulg A106', cantidad: 8, unidad: 'spool', kg_cotizados: 3200, items: [{nombre: 'Spool 6" A106 tipo A', unidad: 'pza', cantidad: 5, kg: 2000}, {nombre: 'Spool 6" A106 tipo B', unidad: 'pza', cantidad: 3, kg: 1200}], fecha_entrega: addDays(hoy(), 21), ppto_horas: 260, precio_venta: 9800000, tipo_documento: 'orden_compra', advertencias: ['Ejemplo de demostración: en la app real se lee tu documento.']}; },
     async auditoria() { return [...T.auditoria].sort((a, b) => b.id - a.id); },
     async cambiarClave() { await new Promise(r => setTimeout(r, 300)); },
     async eliminarUsuario(id, clave) {
@@ -480,7 +481,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 10, _seq: {}, auditoria: [], maquina_uso: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 11, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -529,6 +530,7 @@ const Demo = (() => {
       {numero: 'OT-2617', cliente: 'Fundición ejemplo', descripcion: 'Ejes SAE 4140 mecanizados y bonificados', cantidad: 12, kg_cotizados: 150, unidad: 'eje', fecha_entrega: addDays(today, 14), ppto_horas: 95, creada: wd[1]},
       {numero: 'OT-2609', cliente: 'Minera ejemplo', descripcion: 'Soportes de cañería galvanizados', cantidad: 60, kg_cotizados: 720, unidad: 'pza', estado: 'terminada', fecha_entrega: wd[5], ppto_horas: 50, creada: addDays(today, -20)},
       {numero: 'OT-2620', cliente: 'Planta ejemplo', descripcion: 'Estanque 5 m³ acero carbono (cotizado, sin iniciar)', cantidad: 1, kg_cotizados: 2400, unidad: 'pza', estado: 'cotizada', ppto_horas: 120, creada: today}]);
+    ots.forEach(o => T.ot_items.push({id: nid('ot_items'), ot_id: o.id, nombre: o.descripcion, unidad: /^(m|mt|mts|metro|metros)$/i.test(o.unidad) ? 'm' : 'pza', cantidad: o.cantidad, kg: o.kg_cotizados, orden: 0}));
     T.ot_ppto.push({ot_id: ots[0].id, ppto_hh: 1450000, ppto_material: 6400000, ppto_servicios: 1250000, ppto_maquina: 120000, precio_venta: 12800000},
       {ot_id: ots[1].id, ppto_hh: 780000, ppto_material: 1900000, ppto_servicios: 380000, ppto_maquina: 0, precio_venta: 4600000},
       {ot_id: ots[2].id, ppto_hh: 720000, ppto_material: 1100000, ppto_servicios: 420000, ppto_maquina: 380000, precio_venta: 3900000},
@@ -617,8 +619,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso'];
-      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso']; // toleran que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items'];
+      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items']; // toleran que falte la migración
       const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
@@ -1058,7 +1060,7 @@ function vOTDetalle() {
   return `
   <div class="row"><button class="btn ghost" data-act="tab" data-k="ots">‹ Órdenes de trabajo</button></div>
   <div class="row between"><div><div class="row"><span class="ot" style="font-size:1.1rem">${esc(o.numero)}</span><span class="chip acc">${ESTADOS_OT[o.estado]}</span></div>
-     <h1 style="margin-top:6px">${esc(o.descripcion || '')}</h1><div class="muted">${esc(o.cliente)} · ${num(o.cantidad, 0)} ${esc(o.unidad)}${c.kgCot ? ` · ${kg(c.kgCot)}` : ''}${o.fecha_entrega ? ` · entrega ${fechaTxt(o.fecha_entrega)}` : ''}</div></div>
+     <h1 style="margin-top:6px">${esc(o.descripcion || '')}</h1><div class="muted">${esc(o.cliente)} · ${num(o.cantidad, 0)} ${esc(o.unidad)}${c.kgCot ? ` · ${kg(c.kgCot)}` : ''}${o.creada ? ` · creada ${fechaTxt(String(o.creada).slice(0, 10))}` : ''}${o.fecha_entrega ? ` · entrega ${fechaTxt(o.fecha_entrega)}` : ''}</div></div>
     <div class="row"><button class="btn" data-act="ot-edit" data-id="${o.id}">Editar OT</button>${adm ? `<button class="btn" data-act="ot-csv" data-id="${o.id}">Exportar detalle</button>` : ''}</div></div>
   ${adm ? `<div class="grid2">
     <div class="card"><div class="label">Costo real a la fecha</div><div class="big">${clp(c.total)}</div>
@@ -1078,6 +1080,7 @@ function vOTDetalle() {
     return `<div class="card"><div class="row between"><h3>Stock del proyecto</h3><button class="btn" data-act="go-stockot" data-id="${o.id}">Ver stock y salidas</button></div>
       <div class="row" style="gap:28px">${adm ? `<div><div class="label">Comprado con OC</div><div class="pill-n">${clp(r.comprado)}</div></div><div><div class="label">Cargado a la OT</div><div class="pill-n">${clp(r.entregado)}</div></div><div><div class="label">Saldo sin usar</div><div class="pill-n">${clp(r.saldo)}</div></div>` : ''}
         <div><div class="label">Saldo en kg</div><div class="pill-n">${kg(r.kgSaldo)}</div></div><div><div class="label">Líneas con saldo</div><div class="pill-n">${r.conSaldo} de ${r.ls.length}</div></div></div></div>`; })()}
+  ${vItemsOT(o)}
   ${vMaquinasOT(o, c, adm)}
   ${vDocsOT(o)}
   <div class="grid2">
@@ -1148,17 +1151,23 @@ function sheetOT(o) {
   o = o || {estado: 'en_proceso', cantidad: 1, unidad: 'pza', terminadas: 0};
   const p = S.d.ot_ppto.find(x => x.ot_id === o.id) || o._p || {};
   const v = x => x == null ? '' : x;
+  const _om = sh => { const calc = () => { const it = leerItems(); const kgT = sum(it, x => x.kg), unis = new Set(it.map(x => x.unidad)); document.getElementById('ot-tot').textContent = `${it.length} ítem${it.length === 1 ? '' : 's'} · ${[...unis].map(u => num(sum(it.filter(x => x.unidad === u), x => x.cantidad), 2) + (u === 'm' ? ' m' : ' pza')).join(' + ') || '—'} · ${kg(kgT)}`; };
+    sh.addEventListener('input', e => { if (e.target.closest('#ot-items')) calc(); }); sh.addEventListener('click', e => { if (e.target.closest('[data-act=it-del],[data-act=it-add]')) setTimeout(calc, 0); }); calc(); };
   openModal(o.id ? `Editar ${o.numero}` : 'Nueva OT', `<form data-form="ot"><input type="hidden" name="id" value="${o.id || ''}">
-    ${!o.id && S.ui.otDoc ? `<div class="card" style="background:var(--surface2)"><strong>Datos leídos con IA.</strong> <span class="small">Revísalos y corrige lo que haga falta. Al guardar, el documento queda dentro de la OT.</span>${(o._adv || []).filter(x => !/\bkg\b/i.test(x)).length ? `<div class="small" style="margin-top:6px">${o._adv.filter(x => !/\bkg\b/i.test(x)).map(esc).join('<br>')}</div>` : ''}${o.kg_cotizados ? '' : '<div class="small" style="margin-top:6px"><strong>Falta el peso total.</strong> El documento no lo indica: escríbelo en «Kg totales cotizados». Puedes guardar la OT sin él y completarlo después, pero sin ese dato no se mide el avance por kg.</div>'}</div>` : ''}
+    ${!o.id && S.ui.otDoc ? `<div class="card" style="background:var(--surface2)"><strong>Datos leídos con IA.</strong> <span class="small">Revísalos y corrige lo que haga falta. Al guardar, el documento queda dentro de la OT.</span>${(o._adv || []).filter(x => !/\bkg\b/i.test(x)).length ? `<div class="small" style="margin-top:6px">${o._adv.filter(x => !/\bkg\b/i.test(x)).map(esc).join('<br>')}</div>` : ''}${itemsOT(o).some(x => x.kg) ? '' : '<div class="small" style="margin-top:6px"><strong>Faltan los kg.</strong> El documento no indica el peso de los ítems: escríbelo en cada ítem. Puedes guardar la OT sin él y completarlo después, pero sin ese dato no se mide el avance por kg.</div>'}</div>` : ''}
     <div class="fgrid"><label class="f"><span>N° OT</span><input type="text" name="numero" id="ot-n" value="${esc(o.numero || '')}" required placeholder="OT-2621"></label>
       <label class="f"><span>Estado</span><select name="estado" id="ot-e">${Object.entries(ESTADOS_OT).map(([k, l]) => `<option value="${k}" ${o.estado === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
     <label class="f"><span>Cliente</span><input type="text" name="cliente" id="ot-c" value="${esc(o.cliente || '')}" required></label>
     <label class="f"><span>Descripción</span><input type="text" name="descripcion" id="ot-d" value="${esc(o.descripcion || '')}"></label>
-    <div class="fgrid"><label class="f"><span>Cantidad</span><input type="number" name="cantidad" id="ot-q" min="1" step="any" value="${v(o.cantidad)}" required></label>
-      <label class="f"><span>Unidad</span><input type="text" name="unidad" id="ot-u" value="${esc(o.unidad || 'pza')}" placeholder="pza, spool, m"></label>
-      <label class="f"><span>Kg totales cotizados</span><input type="number" name="kg_cotizados" id="ot-kg" min="0" step="any" value="${v(o.kg_cotizados)}" inputmode="decimal"${!o.id && S.ui.otDoc && !o.kg_cotizados ? ' style="border-color:var(--warn,#d97706)" placeholder="Ingrésalo a mano"' : ''}></label>
-      <label class="f"><span>Entrega</span><input type="date" name="fecha_entrega" id="ot-f" value="${v(o.fecha_entrega)}"></label>
+    <div class="fgrid"><label class="f"><span>Fecha de creación</span><input type="date" name="creada" id="ot-cr" value="${esc(o.creada ? String(o.creada).slice(0, 10) : hoy())}"></label>
+      <label class="f"><span>Fecha de entrega</span><input type="date" name="fecha_entrega" id="ot-f" value="${v(o.fecha_entrega)}"></label>
       <label class="f"><span>HH cotizadas</span><input type="number" name="ppto_horas" id="ot-h" min="0" step="any" value="${v(o.ppto_horas)}"></label></div>
+    <div class="label">Ítems de la OT</div>
+    <p class="small muted">Cada ítem es una parte del trabajo (ej.: «Spool 6" A106»). Indica su nombre, si se mide en piezas o en metros, la cantidad total y los kg que le corresponden.</p>
+    <div id="ot-items" style="display:grid;gap:8px">${itemsOT(o).map(itemHtml).join('')}</div>
+    <datalist id="ot-sug"></datalist>
+    <button type="button" class="btn ghost" data-act="it-add">+ Agregar ítem</button>
+    <div class="card" style="box-shadow:none;background:var(--surface2)"><div class="row between"><span>Total de la OT</span><strong id="ot-tot"></strong></div></div>
     ${verCostos() ? `<div class="label">Cotización (administración y gerencia)</div><div class="fgrid">
       <label class="f"><span>Mano de obra $</span><input type="number" name="ppto_hh" id="ot-p1" min="0" value="${v(p.ppto_hh)}"></label>
       <label class="f"><span>Materiales $</span><input type="number" name="ppto_material" id="ot-p2" min="0" value="${v(p.ppto_material)}"></label>
@@ -1166,7 +1175,32 @@ function sheetOT(o) {
       <label class="f"><span>Máquinas $</span><input type="number" name="ppto_maquina" id="ot-p4" min="0" value="${v(p.ppto_maquina)}"></label>
       <label class="f"><span>Precio de venta $</span><input type="number" name="precio_venta" id="ot-p5" min="0" value="${v(p.precio_venta)}"></label></div>
       <p class="small muted">Montos de costo directo, sin gastos generales. La app suma ${cfg('gg_pct')}% de gastos generales a ambos lados. Con los kg cotizados calcula el precio y el costo por kg.</p>` : ''}
-    <div class="row"><button class="btn pri">Guardar</button>${o.id && verCostos() ? `<button type="button" class="btn danger" data-act="ot-del" data-id="${o.id}">Eliminar</button>` : ''}</div></form>`);
+    <div class="row"><button class="btn pri">Guardar</button>${o.id && verCostos() ? `<button type="button" class="btn danger" data-act="ot-del" data-id="${o.id}">Eliminar</button>` : ''}</div></form>`, _om);
+}
+const esM = u => /^(m|mt|mts|metro|metros|ml)$/i.test(String(u || '').trim());
+function itemsOT(o) {   // ítems guardados; si la OT es antigua o viene de un documento, se arma uno
+  if (o._items?.length) return o._items;
+  const it = o.id ? S.d.ot_items.filter(x => x.ot_id === o.id).sort((a, b) => (a.orden || 0) - (b.orden || 0) || a.id - b.id) : [];
+  if (it.length) return it;
+  return [{nombre: o.descripcion || '', unidad: esM(o.unidad) ? 'm' : 'pza', cantidad: o.cantidad > 0 && o.id ? o.cantidad : (o.cantidad || ''), kg: o.kg_cotizados}];
+}
+const itemHtml = (x = {}) => `<div class="it card" data-iid="${x.id || ''}" style="padding:10px;gap:8px;box-shadow:none">
+  <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="text" class="it-n" placeholder="Nombre del ítem" value="${esc(x.nombre || '')}" style="flex:1;min-width:0" aria-label="Nombre del ítem">
+    <button type="button" class="x" data-act="it-del" aria-label="Quitar ítem">✕</button></div>
+  <div class="fgrid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,110px),1fr))">
+    <label class="f"><span>Se mide en</span><select class="it-u"><option value="pza" ${x.unidad === 'm' ? '' : 'selected'}>Piezas</option><option value="m" ${x.unidad === 'm' ? 'selected' : ''}>Metros</option></select></label>
+    <label class="f"><span>Cantidad total</span><input type="number" class="it-q" step="any" min="0" value="${x.cantidad ?? ''}" inputmode="decimal"></label>
+    <label class="f"><span>Kg del ítem</span><input type="number" class="it-k" step="any" min="0" value="${x.kg ?? ''}" inputmode="decimal"></label></div></div>`;
+function leerItems() {
+  return [...document.querySelectorAll('#ot-items .it')].map((el, i) => ({id: +el.dataset.iid || null, nombre: el.querySelector('.it-n').value.trim(), unidad: el.querySelector('.it-u').value,
+    cantidad: +el.querySelector('.it-q').value || 0, kg: el.querySelector('.it-k').value === '' ? null : +el.querySelector('.it-k').value, orden: i}));
+}
+function vItemsOT(o) {
+  const it = itemsOT(o); if (!o.id || !S.d.ot_items.some(x => x.ot_id === o.id)) return '';
+  const kgT = sum(it, x => x.kg);
+  return `<div class="card"><h3>Ítems de la OT</h3><div class="tbl-wrap"><table><thead><tr><th>Ítem</th><th class="n">Cantidad</th><th class="n">Kg</th></tr></thead><tbody>
+    ${it.map(x => `<tr><td style="white-space:normal">${esc(x.nombre)}</td><td class="n">${num(x.cantidad, 2)} ${x.unidad === 'm' ? 'm' : 'pza'}</td><td class="n">${x.kg != null ? num(x.kg, 1) : '—'}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td><strong>Total</strong></td><td class="n"></td><td class="n"><strong>${num(kgT, 1)}</strong></td></tr></tfoot></table></div></div>`;
 }
 
 /* ---------------- SERVICIOS */
@@ -1744,7 +1778,8 @@ const ACT = {
       const tipo = ['orden_compra', 'cotizacion', 'plano'].includes(r.tipo_documento) ? r.tipo_documento : 'otro';
       S.ui.otDoc = f ? {file: f, tipo} : {demo: true, tipo};
       closeModal();
-      sheetOT({estado: 'en_proceso', cantidad: r.cantidad || 1, unidad: r.unidad || 'pza', terminadas: 0, numero: r.numero || '', cliente: r.cliente || '', descripcion: r.descripcion || '',
+      const its = (r.items || []).filter(x => x && x.nombre).map(x => ({nombre: x.nombre, unidad: esM(x.unidad) ? 'm' : 'pza', cantidad: x.cantidad || '', kg: x.kg ?? null}));
+      sheetOT({estado: 'en_proceso', _items: its.length ? its : null, cantidad: r.cantidad || 1, unidad: r.unidad || 'pza', terminadas: 0, numero: r.numero || '', cliente: r.cliente || '', descripcion: r.descripcion || '',
         kg_cotizados: r.kg_cotizados, fecha_entrega: r.fecha_entrega, ppto_horas: r.ppto_horas, _p: verCostos() && r.precio_venta ? {precio_venta: r.precio_venta} : null, _adv: r.advertencias || []});
     } catch (e) { msg.textContent = errTxt(e); } finally { el.disabled = false; }
   },
@@ -1808,6 +1843,8 @@ const ACT = {
   'tr-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const ot = el.dataset.k === 'ot';
     document.getElementById('tr-modo').value = el.dataset.k; document.getElementById('tr-bod').hidden = ot; document.getElementById('tr-ot-txt').hidden = !ot; },
   'linea-edit': el => sheetLinea(+el.dataset.id),
+  'it-add': () => { document.getElementById('ot-items').insertAdjacentHTML('beforeend', itemHtml()); },
+  'it-del': el => { const box = document.getElementById('ot-items'); if (box.children.length > 1) el.closest('.it').remove(); else el.closest('.it').querySelectorAll('input').forEach(i => i.value = ''); },
   'muso-new': el => sheetMaquinaUso(+el.dataset.ot),
   'muso-del': el => openModal('Quitar horas de máquina', `<p>¿Quitar este registro de horas de máquina? Se descuenta el costo de la OT.</p><div class="row"><button class="btn danger" data-act="muso-del-ok" data-id="${el.dataset.id}">Quitar</button><button class="btn" data-act="close">Cancelar</button></div>`),
   'muso-del-ok': el => run(() => DB.del('maquina_uso', +el.dataset.id), 'Registro quitado'),
@@ -1893,11 +1930,24 @@ const FORMS = {
     if (sal <= a.entrada) return toast('La salida debe ser posterior a la entrada'); return run(() => DB.upd('asistencia', a.id, {salida: sal}), 'Salida guardada'); },
   ot(fd) {
     const id = +fd.get('id') || null, n = k => fd.get(k) === '' || fd.get(k) == null ? null : +fd.get(k);
-    const row = {numero: fd.get('numero').trim(), estado: fd.get('estado'), cliente: fd.get('cliente').trim(), descripcion: fd.get('descripcion') || null, cantidad: n('cantidad') || 1, unidad: fd.get('unidad') || 'pza',
-      kg_cotizados: n('kg_cotizados'), fecha_entrega: fd.get('fecha_entrega') || null, ppto_horas: n('ppto_horas')};
+    const its = leerItems().filter(x => x.nombre || x.cantidad || x.kg);
+    if (!its.length || its.some(x => !x.nombre || !(x.cantidad > 0))) return toast('Cada ítem necesita nombre y cantidad');
+    const unis = [...new Set(its.map(x => x.unidad))], kgT = sum(its, x => x.kg), hayKg = its.some(x => x.kg != null);
+    const row = {numero: fd.get('numero').trim(), estado: fd.get('estado'), cliente: fd.get('cliente').trim(), descripcion: fd.get('descripcion') || null,
+      cantidad: unis.length === 1 ? sum(its, x => x.cantidad) : its.length, unidad: unis.length === 1 ? unis[0] : 'ítems',
+      kg_cotizados: hayKg ? kgT : null, fecha_entrega: fd.get('fecha_entrega') || null, ppto_horas: n('ppto_horas')};
+    const cr = fd.get('creada'), prev = id ? otOf(id) : null;
+    if (cr && (!prev || String(prev.creada).slice(0, 10) !== cr)) row.creada = new Date(cr + 'T12:00:00').toISOString();
     if (S.d.ots.some(o => o.numero.toLowerCase() === row.numero.toLowerCase() && o.id !== id)) return toast('Ya existe una OT con ese número');
     return run(async () => {
       const o = id ? await DB.upd('ots', id, row) : await DB.ins('ots', row);
+      const viejos = id ? S.d.ot_items.filter(x => x.ot_id === o.id) : [], quedan = new Set(its.filter(x => x.id).map(x => x.id));
+      for (const x of viejos) if (!quedan.has(x.id)) await DB.del('ot_items', x.id);
+      for (const x of its) {
+        const r = {nombre: x.nombre, unidad: x.unidad, cantidad: x.cantidad, kg: x.kg, orden: x.orden}, ant = x.id && viejos.find(y => y.id === x.id);
+        if (!x.id) await DB.ins('ot_items', {ot_id: o.id, ...r});
+        else if (ant && ['nombre', 'unidad', 'cantidad', 'kg', 'orden'].some(k => String(ant[k] ?? '') !== String(r[k] ?? ''))) await DB.upd('ot_items', x.id, r);
+      }
       const od = S.ui.otDoc; S.ui.otDoc = null;
       if (!id && od && od.file) { try { await guardarDoc(od.file, {ot_id: o.id, tipo: od.tipo, nota: 'Documento de la OT (leído con IA)'}); } catch (e) { toast('OT creada, pero no se pudo guardar el documento: ' + errTxt(e)); } }
       if (verCostos() && ['ppto_hh', 'ppto_material', 'ppto_servicios', 'ppto_maquina', 'precio_venta'].some(k => fd.get(k) !== '')) {

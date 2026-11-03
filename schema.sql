@@ -832,6 +832,24 @@ revoke all on maquina_uso, maquina_uso_costo from anon, authenticated;
 grant select, insert, update, delete on maquina_uso to authenticated;
 grant select on maquina_uso_costo to authenticated;
 
+-- ---------- Ítems de cada OT (nombre, unidad piezas/metros, cantidad y kg) ----
+create table if not exists ot_items (
+  id bigint generated always as identity primary key,
+  ot_id bigint not null references ots(id) on delete cascade,
+  nombre text not null,
+  unidad text not null default 'pza' check (unidad in ('pza','m')),
+  cantidad numeric not null check (cantidad > 0),
+  kg numeric check (kg >= 0),
+  orden int not null default 0
+);
+create index if not exists ot_items_ot on ot_items (ot_id);
+alter table ot_items enable row level security;
+drop policy if exists oti_leer on ot_items; drop policy if exists oti_esc on ot_items;
+create policy oti_leer on ot_items for select to authenticated using (mi_rol() is not null);
+create policy oti_esc  on ot_items for all to authenticated using (mi_rol() in ('jefe','gerencia','admin')) with check (mi_rol() in ('jefe','gerencia','admin'));
+revoke all on ot_items from anon, authenticated;
+grant select, insert, update, delete on ot_items to authenticated;
+
 -- ---------- Registro de cambios (auditoría) --------------------------
 -- Cada alta, cambio o eliminación que hace un usuario queda anotada con quién, cuándo y qué.
 -- Solo el administrador puede leerla; nadie puede modificarla ni borrarla desde la app.
@@ -879,6 +897,7 @@ begin
   elsif t = 'ot_stock' then x := coalesce(r->>'descripcion','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'compras' then x := coalesce(r->>'numero','s/n') || ' · ' || coalesce(r->>'proveedor','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'documentos' then x := coalesce(r->>'nombre','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+  elsif t = 'ot_items' then x := coalesce(r->>'nombre','') || ' · ' || coalesce(r->>'cantidad','') || case when r->>'unidad' = 'm' then ' m' else ' pza' end || coalesce(' · ' || (r->>'kg') || ' kg', '') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'maquina_uso' then x := coalesce((select nombre from maquinas where id = (r->>'maquina_id')::bigint), '?') || ' · ' || coalesce(r->>'horas','') || ' h · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'produccion' then x := 'OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?') || ' · ' || coalesce(r->>'kg','') || ' kg';
   else x := r->>'id';
@@ -913,7 +932,7 @@ begin
       from jsonb_object_keys(r) as k(key) where r->k.key <> 'null'::jsonb and k.key <> all (ign);
   end if;
   sec := case tg_table_name
-    when 'ots' then 'Órdenes de trabajo' when 'ot_ppto' then 'Órdenes de trabajo' when 'produccion' then 'Órdenes de trabajo'
+    when 'ots' then 'Órdenes de trabajo' when 'ot_ppto' then 'Órdenes de trabajo' when 'produccion' then 'Órdenes de trabajo' when 'ot_items' then 'Órdenes de trabajo'
     when 'hh_registros' then 'Horas hombre' when 'asistencia' then 'Horas hombre'
     when 'materiales' then 'Materiales'
     when 'consumos' then 'Bodega' when 'stock_ingresos' then 'Bodega' when 'ot_stock' then 'Bodega'
@@ -935,7 +954,7 @@ begin
 end $$;
 
 do $$ declare x record; begin
-  for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('maquina_uso','todo'),('hh_registros','cambios'),('asistencia','cambios'),
+  for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('ot_items','todo'),('maquina_uso','todo'),('hh_registros','cambios'),('asistencia','cambios'),
       ('materiales','todo'),('consumos','cambios'),('stock_ingresos','todo'),('ot_stock','cambios'),('compras','todo'),('documentos','todo'),
       ('servicios','cambios'),('tarifas','todo'),('maquinas','todo'),('procesos','todo'),('perfiles','cambios'),('config','todo'),
       ('operaciones','todo'),('dias_especiales','todo')) as v(t, m)

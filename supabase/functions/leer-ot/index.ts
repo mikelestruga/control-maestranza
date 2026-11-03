@@ -20,6 +20,7 @@ Reglas:
 - "numero": el número de la OT. Si el documento no trae uno propio del taller, usa el número de orden de compra o de cotización del cliente.
 - "cliente": razón social o nombre del cliente que encarga el trabajo.
 - "descripcion": resumen corto (máx. 140 caracteres) de lo que hay que fabricar o hacer, ej. "Fabricación de 12 spools de cañería 6\" A106".
+- "items": lista de los ítems distintos del trabajo (un spool, un estanque, una línea de cañería, etc.). Para cada uno: "nombre" (claro y corto), "unidad" ("pza" si se cuenta en piezas/unidades, "m" si se mide en metros), "cantidad" (total del ítem) y "kg" (peso total de ESE ítem solo si el documento lo indica; si no, null, no lo calcules). Si el documento es un solo trabajo, un único ítem. Si no hay ítems legibles, lista vacía.
 - "cantidad": número de piezas/unidades a fabricar (entero o decimal). Si hay varios ítems distintos, la suma de piezas; si no se puede saber, 1 y avisa en "advertencias".
 - "unidad": pza, spool, m, kg, juego, etc. Si no se indica, "pza".
 - "kg_cotizados": peso TOTAL en kg del trabajo SOLO si el documento lo indica (peso total, kg totales). No lo calcules tú. Si no aparece, null.
@@ -39,13 +40,14 @@ const SCHEMA = {
     cantidad: { type: ["number", "null"] },
     unidad: { type: ["string", "null"] },
     kg_cotizados: { type: ["number", "null"] },
+    items: { type: "array", items: { type: "object", properties: { nombre: { type: "string" }, unidad: { type: "string", enum: ["pza", "m"] }, cantidad: { type: "number" }, kg: { type: ["number", "null"] } }, required: ["nombre", "unidad", "cantidad", "kg"] } },
     fecha_entrega: { type: ["string", "null"], description: "AAAA-MM-DD" },
     ppto_horas: { type: ["number", "null"] },
     precio_venta: { type: ["integer", "null"] },
     tipo_documento: { type: "string", enum: ["ot", "cotizacion", "orden_compra", "plano", "otro"] },
     advertencias: { type: "array", items: { type: "string" } },
   },
-  required: ["numero", "cliente", "descripcion", "cantidad", "unidad", "kg_cotizados", "fecha_entrega", "ppto_horas", "precio_venta", "tipo_documento", "advertencias"],
+  required: ["numero", "cliente", "descripcion", "cantidad", "unidad", "kg_cotizados", "items", "fecha_entrega", "ppto_horas", "precio_venta", "tipo_documento", "advertencias"],
 };
 
 Deno.serve(async (req) => {
