@@ -687,7 +687,10 @@ const Cloud = (() => {
     },
     async gestionarUsuario(body) {
       const {data, error} = await sb.functions.invoke('gestionar-usuarios', {body});
-      if (error) { let code = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; } catch (e) {}
+      if (error) { let code = '', det = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; det = b.detalle || ''; } catch (e) {}
+        if (code === 'no_se_pudo') throw new Error(/weak|guess|pwned|breach|common/i.test(det) ? 'Supabase rechazó la clave por ser fácil de adivinar. Usa una más larga (8 o más) con letras y números.'
+          : /at least|short|length/i.test(det) ? 'La clave es muy corta para la configuración de Supabase. Usa una más larga.' : /not.?found|no user/i.test(det) ? 'Ese usuario no existe en el sistema de acceso de Supabase.'
+          : 'No se pudo cambiar la clave' + (det ? ': ' + det : '.'));
         throw new Error(({sin_permiso: 'Solo el administrador puede hacer esto.', clave_corta: 'La clave debe tener al menos 6 caracteres.', no_autenticado: 'Tu sesión venció. Vuelve a entrar.',
           sin_usuario: 'No se encontró ese usuario.', clave_incorrecta: 'Tu clave no es correcta.', a_si_mismo: 'No puedes eliminar tu propio usuario.',
           ultimo_admin: 'No se puede eliminar al único administrador.',
