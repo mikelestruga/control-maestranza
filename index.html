@@ -234,7 +234,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], oc_lineas: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -273,12 +273,12 @@ const pesoTxt = b => !b ? '' : b > 1048576 ? num(b / 1048576, 1) + ' MB' : num(b
 /* ---------------------------------------------------------------- registro de cambios (auditoría) */
 const AUD = {
   seccion: {ots: 'Órdenes de trabajo', ot_items: 'Órdenes de trabajo', tipos_item: 'Costos y tarifas', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
-    materiales: 'Materiales', consumos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', documentos: 'Compras y documentos',
+    materiales: 'Materiales', consumos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', oc_lineas: 'Compras y documentos', documentos: 'Compras y documentos',
     servicios: 'Pintura y servicios', maquina_uso: 'Máquinas', tarifas: 'Costos y tarifas', maquinas: 'Costos y tarifas', procesos: 'Costos y tarifas', perfiles: 'Trabajadores'},
   modo: {ots: 'todo', ot_items: 'todo', tipos_item: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
-    compras: 'todo', documentos: 'todo', maquina_uso: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
+    compras: 'todo', oc_lineas: 'cambios', documentos: 'todo', maquina_uso: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
   nombre: {ots: 'OT', tipos_item: 'tipo de trabajo', ot_items: 'ítem de OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
-    stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', documentos: 'documento', servicios: 'servicio', maquina_uso: 'horas de máquina', tarifas: 'tarifa HH', maquinas: 'máquina',
+    stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', oc_lineas: 'línea de OC', documentos: 'documento', servicios: 'servicio', maquina_uso: 'horas de máquina', tarifas: 'tarifa HH', maquinas: 'máquina',
     procesos: 'proceso propio', perfiles: 'trabajador', config: 'parámetro', operaciones: 'operación', dias_especiales: 'feriado'},
   agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock', 'maquina_uso', 'ot_items'],
   col: {costo_unit: 'Costo unitario', costo_hh: 'Costo hora', costo_hh_extra: 'Costo hora extra', precio_venta: 'Precio de venta', ppto_hh: 'Mano de obra cotizada', ppto_material: 'Materiales cotizados',
@@ -302,7 +302,8 @@ function audDet(t, r) {
     case 'consumos': case 'servicios': return `${r.descripcion || T_.materiales.find(x => x.id === r.material_id)?.nombre || T_.procesos.find(x => x.id === r.proceso_id)?.nombre || ''} · OT ${o(r.ot_id)}`;
     case 'stock_ingresos': return `${T_.materiales.find(x => x.id === r.material_id)?.nombre || '?'} · ${r.cantidad} un`;
     case 'ot_stock': return `${r.descripcion} · OT ${o(r.ot_id)}`;
-    case 'compras': return `${r.numero || 's/n'} · ${r.proveedor || ''} · OT ${o(r.ot_id)}`;
+    case 'compras': return `${r.numero || 's/n'} · ${r.proveedor || ''} · ${r.ot_id ? 'OT ' + o(r.ot_id) : 'Bodega'}`;
+    case 'oc_lineas': return `${r.descripcion} · OC ${T_.compras.find(x => x.id === r.compra_id)?.numero || 's/n'}`;
     case 'documentos': return `${r.nombre} · OT ${o(r.ot_id)}`;
     case 'produccion': return `OT ${o(r.ot_id)} · ${r.kg} kg`;
     case 'ot_items': return `${r.nombre} · ${r.cantidad} ${r.unidad === 'm' ? 'm' : 'pza'}${r.kg != null ? ' · ' + r.kg + ' kg' : ''} · OT ${o(r.ot_id)}`;
@@ -344,6 +345,7 @@ const Demo = (() => {
     stock_ingresos: () => ({fecha: hoy(), registrado_por: S.me.id, costo_unit: null, doc_ref: null, kg: null}),
     asistencia: () => ({perfil_id: S.me.id, entrada: null, salida: null}),
     ots: () => ({estado: 'en_proceso', cantidad: 1, terminadas: 0, kg_cotizados: null, kg_producidos: 0, unidad: 'pza', creada: new Date().toISOString()}),
+    oc_lineas: () => ({recibido: 0, factor: 1, material_id: null, codigo: null, costo_unit: null, kg_unidad: null, creado: new Date().toISOString()}),
     maquina_uso: () => ({fecha: hoy(), nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
     produccion: () => ({fecha: hoy(), piezas: 0, nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
     materiales: () => ({stock: 0, stock_min: 0, activo: true, costo_estimado: false, unidad: 'un', kg_unidad: null, grupo: null}),
@@ -444,7 +446,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 14) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 15) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -463,13 +465,24 @@ const Demo = (() => {
     async hhQuery() { return null; }, // en demo todo está cargado
     async insMany(t, rows) { const out = []; for (const r of rows) out.push(await api.ins(t, r)); return out; },
     async rpc(name, a) {
+      if (name === 'recibir_oc') {
+        const c = T.compras.find(x => x.id === a.p_compra); let n = 0;
+        for (const x of a.p_lineas) { const q = +x.cantidad; if (!(q > 0)) continue; const l = T.oc_lineas.find(y => y.id === x.id && y.compra_id === c.id);
+          if (q > +l.cantidad - +l.recibido + 1e-4) throw new Error('Recibido mayor a lo pendiente: ' + l.descripcion);
+          const mat = x.material_id || l.material_id; if (!mat) throw new Error('Falta asignar un material a: ' + l.descripcion); const f = +x.factor || +l.factor;
+          l.recibido = r2(+l.recibido + q); l.material_id = mat; l.factor = f;
+          await api.ins('stock_ingresos', {material_id: mat, cantidad: r2(q * f), costo_unit: l.costo_unit != null ? r2(l.costo_unit / f) : null, kg: l.kg_unidad != null ? r2(q * l.kg_unidad) : null, doc_ref: 'OC ' + (c.numero || 's/n') + (c.proveedor ? ' · ' + c.proveedor : '')}); n++; }
+        if (!n) throw new Error('No hay cantidades para recibir');
+        const pend = T.oc_lineas.filter(y => y.compra_id === c.id && +y.recibido < +y.cantidad - 1e-4).length;
+        c.estado = pend ? 'parcial' : 'recibida'; if (!pend) c.fecha_recepcion = hoy(); save(); return;
+      }
       if (name !== 'traspasar_a_bodega') throw new Error('Función no disponible en demo');
       const l = T.ot_stock.find(x => x.id === a.p_linea), sal = r2(+l.cantidad - +l.traspasado - sum(T.consumos.filter(c => c.ot_stock_id === l.id), c => c.cantidad));
       if (a.p_cantidad <= 0 || a.p_cantidad > sal + 1e-4) throw new Error('Cantidad mayor al saldo');
       l.traspasado = r2(+l.traspasado + a.p_cantidad);
       await api.ins('stock_ingresos', {material_id: a.p_material, cantidad: a.p_cantidad, costo_unit: l.costo_unit, kg: l.kg_unidad != null ? r2(a.p_cantidad * l.kg_unidad) : null, doc_ref: 'Traspaso desde ' + T.ots.find(o => o.id === l.ot_id)?.numero});
     },
-    async subirDoc(file, otId) { const path = `demo/ot-${otId}/${Date.now()}-${limpiarNombre(file.name)}`; demoArchivos.set(path, URL.createObjectURL(file)); return path; },
+    async subirDoc(file, otId) { const path = `demo/${otId == null ? 'bodega' : 'ot-' + otId}/${Date.now()}-${limpiarNombre(file.name)}`; demoArchivos.set(path, URL.createObjectURL(file)); return path; },
     async urlDoc(path) { return demoArchivos.get(path) || null; },
     async leerOT() { await new Promise(r => setTimeout(r, 900)); return {numero: 'OT-2650', cliente: 'Minera Ejemplo S.A.', descripcion: 'Fabricación de 8 spools de cañería 6 pulg A106', cantidad: 8, unidad: 'spool', kg_cotizados: 3200, items: [{nombre: 'Spool 6" A106 tipo A', unidad: 'pza', cantidad: 5, kg: 2000}, {nombre: 'Spool 6" A106 tipo B', unidad: 'pza', cantidad: 3, kg: 1200}], fecha_entrega: addDays(hoy(), 21), ppto_horas: 260, precio_venta: 9800000, tipo_documento: 'orden_compra', advertencias: ['Ejemplo de demostración: en la app real se lee tu documento.']}; },
     async auditoria() { return [...T.auditoria].sort((a, b) => b.id - a.id); },
@@ -490,7 +503,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 14, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 15, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], oc_lineas: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -524,7 +537,7 @@ const Demo = (() => {
       {codigo: 'PL-10', nombre: 'Plancha A36 10 mm', grupo: 'Plancha A36', unidad: 'kg', kg_unidad: 1, costo_unit: 1350, stock: 1800, stock_min: 500},
       {codigo: 'PL-6', nombre: 'Plancha A36 6 mm', grupo: 'Plancha A36', unidad: 'kg', kg_unidad: 1, costo_unit: 1380, stock: 950, stock_min: 400},
       {codigo: 'BR-4140', nombre: 'Barra SAE 4140 Ø 3"', unidad: 'kg', kg_unidad: 1, costo_unit: 3900, stock: 210, stock_min: 100},
-      {codigo: 'EL-7018', nombre: 'Electrodo E7018 1/8"', grupo: 'Electrodos', unidad: 'kg', kg_unidad: 1, costo_unit: 4300, stock: 85, stock_min: 40},
+      {codigo: 'EL-7018', nombre: 'Electrodo E7018 1/8"', grupo: 'Electrodos', unidad: 'kg', kg_unidad: 1, costo_unit: 4300, stock: 25, stock_min: 40},
       {codigo: 'AL-ER70', nombre: 'Alambre ER70S-6 1,2 mm', unidad: 'kg', kg_unidad: 1, costo_unit: 3100, stock: 120, stock_min: 60, costo_estimado: true},
       {codigo: 'GS-AR', nombre: 'Gas mezcla Ar/CO₂', unidad: 'm³', costo_unit: null, stock: 14, stock_min: 6},
       {codigo: 'EL-6011', nombre: 'Electrodo E6011 1/8"', grupo: 'Electrodos', unidad: 'kg', kg_unidad: 1, costo_unit: 3900, stock: 30, stock_min: 15},
@@ -601,6 +614,9 @@ const Demo = (() => {
     [[0, 'CA-4-40', 72, 18400, 'Fact. 30551'], [2, 'DI-7', 25, 1790, 'Fact. 30584'], [1, 'PL-10', 1200, 1350, 'Fact. 30577'], [2, 'FL-4-150', 24, 21900, 'Fact. 30580'], [3, 'BR-4140', 180, 3900, 'Fact. 30602'], [4, 'PL-6', 600, 1380, 'Fact. 30619'], [5, 'EL-7018', 40, 4300, 'Fact. 30633']]
       .forEach(([di, c, q, cu, doc]) => { const r = {...defaults.stock_ingresos(), id: nid('stock_ingresos'), material_id: M(c), cantidad: q, costo_unit: cu, doc_ref: doc, fecha: wd[di], registrado_por: 'p-bod'}; before('stock_ingresos', r, null); T.stock_ingresos.push(r); after('stock_ingresos', r, 'INSERT'); });
     // compra con OC para la OT-2614 (stock del proyecto) y salidas diarias
+    { const oc = {...defaults.compras(), id: nid('compras'), ot_id: null, numero: 'OC-5120', proveedor: 'Distribuidora Industrial Norte', fecha: wd[2], estado: 'pedida', total: 4107000, neto: 3451000, creado_por: 'p-bod'}; T.compras.push(oc);
+      [[mats[1], 'Flange SO 4" #150 ASTM A105', 'un', 60, 21900, 7.7, 1], [mats[0], 'Cañería 4" SCH40 A106 tira 6 m', 'tira', 20, 110400, 96.4, 6], [mats[5], 'Electrodo E7018 1/8" caja 5 kg', 'caja', 20, 21500, 5, 5]]
+        .forEach(([m, d, u, q, pc, kgu, f]) => T.oc_lineas.push({...defaults.oc_lineas(), id: nid('oc_lineas'), compra_id: oc.id, material_id: m.id, codigo: m.codigo, descripcion: d, unidad: u, cantidad: q, costo_unit: pc, kg_unidad: kgu, factor: f})); }
     { const co = {...defaults.compras(), id: nid('compras'), ot_id: B.id, numero: 'OC-4471', proveedor: 'Aceros ejemplo S.A.', fecha: wd[1], estado: 'recibida', fecha_recepcion: wd[2], neto: 2263500, total: 2693565, creado_por: 'p-bod'}; T.compras.push(co);
       T.documentos.push({...defaults.documentos(), id: nid('documentos'), ot_id: B.id, compra_id: co.id, tipo: 'orden_compra', nombre: 'OC-4471 Aceros ejemplo.pdf', path: 'demo/ejemplo-oc-4471.pdf', mime: 'application/pdf', tamano: 182000, subido_por: 'p-bod', creado: wd[1]},
         {...defaults.documentos(), id: nid('documentos'), ot_id: B.id, compra_id: null, tipo: 'plano', nombre: 'Plano chute rev B.pdf', path: 'demo/ejemplo-plano.pdf', mime: 'application/pdf', tamano: 1250000, subido_por: 'p-jefe', creado: wd[0]});
@@ -630,8 +646,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist'];
-      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist']; // toleran que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist', 'oc_lineas'];
+      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist', 'oc_lineas']; // toleran que falte la migración
       const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
@@ -654,7 +670,7 @@ const Cloud = (() => {
     async insMany(t, rows) { const {data, error} = await sb.from(t).insert(rows).select(); if (error) throw error; return data; },
     async rpc(name, args) { const {error} = await sb.rpc(name, args); if (error) throw error; },
     async subirDoc(file, otId) {
-      const path = `ot-${otId}/${Date.now()}-${limpiarNombre(file.name)}`;
+      const path = `${otId == null ? 'bodega' : 'ot-' + otId}/${Date.now()}-${limpiarNombre(file.name)}`;
       const {error} = await sb.storage.from('documentos').upload(path, file, {contentType: file.type || 'application/octet-stream', upsert: false});
       if (error) throw new Error(/bucket/i.test(error.message) ? 'Falta crear la carpeta de documentos en Supabase (ejecuta migracion-documentos.sql).' : 'No se pudo subir el archivo: ' + error.message);
       return path;
@@ -1265,7 +1281,7 @@ function sheetServicio(otId) {
 /* ---------------- BODEGA */
 function vBodega() {
   const t = S.ui.bodTab, bajo = S.d.materiales.filter(m => m.activo && +m.stock <= +m.stock_min);
-  const tabsH = `<div class="seg" style="max-width:640px">${[['consumo', 'Salida a OT'], ['stockot', 'Stock por OT'], ['ingreso', 'Ingreso'], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
+  const tabsH = `<div class="seg" style="max-width:640px">${[['consumo', 'Salida a OT'], ['stockot', 'Stock por OT'], ['ingreso', 'Ingreso'], ['compras', `Compras${ocPend().length ? ` (${ocPend().length} por recibir)` : ''}`], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
   const mats = S.d.materiales.filter(m => m.activo);
   const opt = m => `<option value="${m.id}">${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} — ${num(m.stock, 2)} ${esc(m.unidad)}</option>`;
   const matOptions = conGrupo => grupos().map(g => { const gi = grupoInfo(g);
@@ -1273,6 +1289,7 @@ function vBodega() {
     + (mats.some(m => !m.grupo) ? `<optgroup label="Sin grupo">${mats.filter(m => !m.grupo).map(opt).join('')}</optgroup>` : '');
   let body = '';
   if (t === 'stockot') body = vStockOT();
+  else if (t === 'compras') body = vComprasBodega();
   else if (t === 'consumo') {
     const rec = [...S.d.consumos].sort((a, b) => b.id - a.id).slice(0, 25);
     body = `<div class="grid2"><form class="card" data-form="consumo"><h2>Salida de material a una OT</h2>
@@ -1307,7 +1324,7 @@ function vBodega() {
     const fila = m => `<tr><td>${esc(m.codigo || '')}</td><td style="white-space:normal;${m.grupo ? 'padding-left:22px' : ''}">${esc(m.nombre)}</td><td class="n">${num(m.stock, 2)} ${esc(m.unidad)}</td>
       <td class="n">${kgMov(m, m.stock) != null ? num(kgMov(m, m.stock), 0) : '<span class="muted" title="Sin peso por unidad (Ajustes › Materiales). Los consumibles como gas o discos pueden quedar sin peso.">—</span>'}</td><td class="n">${num(m.stock_min, 2)}</td>
       ${verCosto ? `<td class="n">${m.costo_unit == null ? '<span class="chip warn">sin dato</span>' : clp(m.costo_unit)}${m.costo_estimado ? ' <span class="chip est">est.</span>' : ''}</td><td class="n">${m.costo_unit != null ? clp(Math.max(0, m.stock) * m.costo_unit) : ''}</td>` : ''}
-      <td>${+m.stock <= +m.stock_min ? '<span class="chip bad">Reponer</span> ' : ''}${puedeCatMat() ? `<button type="button" class="btn ghost" data-act="cat-edit" data-k="materiales" data-id="${m.id}">Editar</button>` : ''}</td></tr>`;
+      <td>${+m.stock <= +m.stock_min ? '<span class="chip bad">Reponer</span> ' : ''}${enCaminoMap().get(m.id) ? `<span class="chip warn">en camino ${num(enCaminoMap().get(m.id), 1)}</span> ` : ''}${puedeCatMat() ? `<button type="button" class="btn ghost" data-act="cat-edit" data-k="materiales" data-id="${m.id}">Editar</button>` : ''}</td></tr>`;
     const act = S.d.materiales.filter(m => m.activo);
     body = `<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Material</th><th class="n">Stock</th><th class="n">Stock kg</th><th class="n">Mínimo</th>${verCosto ? '<th class="n">Costo prom.</th><th class="n">Valor</th>' : ''}<th></th></tr></thead><tbody>
       ${grupos().map(g => { const gi = grupoInfo(g), its = act.filter(m => m.grupo === g).sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -1441,6 +1458,115 @@ function sheetLinea(id) {
     <button class="btn pri">Guardar</button></form>`);
 }
 
+/* ---------------- COMPRAS DE BODEGA (OC con IA, acuse de recepción y faltantes) */
+const puedeRecibir = () => ['bodega', 'gerencia', 'admin'].includes(role());
+const ocBodega = () => S.d.compras.filter(c => !c.ot_id);
+const ocPend = () => ocBodega().filter(c => c.estado !== 'recibida');
+const normTxt = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9"\/.\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+function matchMaterial(desc, codigo) {
+  const mats = S.d.materiales.filter(m => m.activo);
+  if (codigo) { const c = normTxt(codigo), m = mats.find(x => x.codigo && normTxt(x.codigo) === c); if (m) return m; }
+  const tk = t => new Set(normTxt(t).split(' ').filter(w => w.length > 1)), a = tk(desc); if (!a.size) return null;
+  let best = null, bs = 0;
+  for (const m of mats) { const b = tk(m.nombre); if (!b.size) continue; let k = 0; b.forEach(w => { if (a.has(w)) k++; }); const sc = k / b.size; if (sc > bs) { bs = sc; best = m; } }
+  return bs >= 0.67 ? best : null;
+}
+// Lo que viene en camino por material (en unidades del material), de OC de bodega aún no recibidas del todo
+function enCaminoMap() {
+  const abiertas = new Set(ocPend().map(c => c.id)), mp = new Map();
+  S.d.oc_lineas.forEach(l => { if (abiertas.has(l.compra_id) && l.material_id) mp.set(l.material_id, (mp.get(l.material_id) || 0) + Math.max(0, +l.cantidad - +l.recibido) * +l.factor); });
+  return mp;
+}
+function faltantes() {
+  const ec = enCaminoMap();
+  return S.d.materiales.filter(m => m.activo && +m.stock_min > 0 && +m.stock <= +m.stock_min)
+    .map(m => ({m, ec: ec.get(m.id) || 0, falta: Math.max(0, +m.stock_min - +m.stock - (ec.get(m.id) || 0))}))
+    .sort((a, b) => (b.falta > 0) - (a.falta > 0) || (a.m.stock / (a.m.stock_min || 1)) - (b.m.stock / (b.m.stock_min || 1)));
+}
+function vComprasBodega() {
+  const verP = verCostos() || role() === 'bodega', fl = faltantes(), ocs = [...ocBodega()].sort((a, b) => (a.estado === 'recibida') - (b.estado === 'recibida') || b.fecha.localeCompare(a.fecha) || b.id - a.id);
+  const sinMat = S.d.oc_lineas.filter(l => !l.material_id && ocPend().some(c => c.id === l.compra_id)).length;
+  return `<div class="row between"><p class="small muted" style="margin:0;max-width:62ch">Órdenes de compra para reponer la bodega general. Sube la OC (la IA lee las líneas), y cuando llegue el material acusa recepción: entra solo al stock.</p>
+    <button class="btn pri" data-act="ocb-new">+ Nueva OC de bodega</button></div>
+  <div class="card"><div class="row between"><h2>Material que falta</h2><span class="small muted">Stock en o bajo el mínimo</span></div>
+    ${fl.length ? `<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="n">Stock</th><th class="n">En camino</th><th class="n">Por pedir</th></tr></thead><tbody>
+      ${fl.map(x => `<tr><td style="white-space:normal">${esc(x.m.nombre)}<div class="tiny muted">${x.m.codigo ? esc(x.m.codigo) + ' · ' : ''}mínimo ${num(x.m.stock_min, 2)}</div></td><td class="n">${num(x.m.stock, 2)} ${esc(x.m.unidad)}</td>
+        <td class="n">${x.ec ? num(x.ec, 2) : '—'}</td><td class="n">${x.falta ? `<strong>${num(x.falta, 2)} ${esc(x.m.unidad)}</strong>` : '<span class="chip ok">Cubierto</span>'}</td></tr>`).join('')}</tbody></table></div>
+      <p class="small muted">«Por pedir» = mínimo − stock − lo que viene en camino en OC aún no recibidas.${sinMat ? ` Hay ${sinMat} líneas de OC sin material asignado que no se cuentan como «en camino».` : ''}</p>`
+    : '<div class="empty">Nada bajo el mínimo. 👍 Define el stock mínimo de cada material en Ajustes › Materiales.</div>'}</div>
+  <div class="card"><h2>Órdenes de compra</h2>
+    ${ocs.length ? `<div style="display:grid;gap:10px">${ocs.map(c => { const ls = S.d.oc_lineas.filter(l => l.compra_id === c.id), pend = ls.filter(l => +l.recibido < +l.cantidad - 1e-4).length;
+      return `<div class="card" style="box-shadow:none;padding:12px;gap:8px"><div class="row between" style="align-items:flex-start;gap:8px"><div class="t" style="min-width:0"><strong>${esc(c.numero || 'Sin número')}</strong> · ${esc(c.proveedor || '')}<div class="small muted">${fechaTxt(c.fecha)} · ${ls.length} líneas${c.estado === 'parcial' ? ` · faltan ${pend}` : ''}${verP && c.total ? ` · ${clp(c.total)}` : ''}${c.leida_con_ia ? ' · leída con IA' : ''}${c.fecha_recepcion && c.estado === 'recibida' ? ` · recibida ${fechaTxt(c.fecha_recepcion)}` : ''}</div></div>
+        ${c.estado === 'recibida' ? '<span class="chip ok">Recibida</span>' : c.estado === 'parcial' ? '<span class="chip warn">Parcial</span>' : '<span class="chip warn">Pedida</span>'}</div>
+        <div class="row" style="gap:6px">
+          <button class="btn ghost" data-act="ocb-ver" data-id="${c.id}">Ver</button>${c.estado !== 'recibida' && puedeRecibir() ? `<button class="btn" data-act="ocb-recibir" data-id="${c.id}">Acusar recepción</button>` : ''}</div></div>`; }).join('')}</div>`
+    : '<div class="empty">Aún no hay órdenes de compra de bodega.</div>'}</div>`;
+}
+const ocbMatOpts = sel => `<option value="">Sin asignar</option>${puedeCatMat() ? `<option value="new" ${sel === 'new' ? 'selected' : ''}>+ Crear material nuevo</option>` : ''}${S.d.materiales.filter(m => m.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(m => `<option value="${m.id}" ${+sel === m.id ? 'selected' : ''}>${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} (${esc(m.unidad)})</option>`).join('')}`;
+const ocbLineaHtml = (l = {}) => { const m = l.material_id ? byId(S.d.materiales, l.material_id) : null;
+  return `<div class="ol card" style="padding:10px;gap:8px;box-shadow:none"><input type="hidden" class="ol-c" value="${esc(l.codigo || '')}">
+  <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="text" class="ol-d" placeholder="Descripción" value="${esc(l.descripcion || '')}" style="flex:1;min-width:0" aria-label="Descripción">
+    <button type="button" class="x" data-act="ocl-del" aria-label="Quitar línea">✕</button></div>
+  <label class="f"><span>Material de bodega</span><select class="ol-m">${ocbMatOpts(m ? m.id : l.nuevo ? 'new' : '')}</select></label>
+  <div class="fgrid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,110px),1fr))">
+    <label class="f"><span>Cantidad</span><input type="number" class="ol-q" step="any" min="0" value="${l.cantidad ?? ''}" inputmode="decimal"></label>
+    <label class="f"><span>Unidad</span><input type="text" class="ol-u" value="${esc(l.unidad || 'un')}" list="unidades"></label>
+    <label class="f"><span>Precio neto $</span><input type="number" class="ol-p" step="any" min="0" value="${l.precio_unitario_neto || ''}" inputmode="decimal" placeholder="pendiente"></label>
+    <label class="f"><span>Kg total</span><input type="number" class="ol-k" step="any" min="0" value="${l.kg_total ?? ''}" inputmode="decimal" placeholder="opcional"></label></div>
+  <label class="f ol-fw" hidden><span>Equivalencia: 1 <b class="ol-fl"></b> = ? <b class="ol-fu"></b> del material</span><input type="number" class="ol-f" step="any" min="0" value="1" inputmode="decimal"></label></div>`; };
+function ocbSync(ln, auto) {
+  const sel = ln.querySelector('.ol-m').value, m = /^\d+$/.test(sel) ? byId(S.d.materiales, +sel) : null, u = ln.querySelector('.ol-u').value.trim().toLowerCase(), fw = ln.querySelector('.ol-fw'), f = ln.querySelector('.ol-f');
+  const dif = !!m && String(m.unidad).toLowerCase() !== u; fw.hidden = !dif;
+  if (!dif) { f.value = 1; return; }
+  ln.querySelector('.ol-fu').textContent = m.unidad; ln.querySelector('.ol-fl').textContent = u;
+  if (auto || !f.value || +f.value === 1) { const q = +ln.querySelector('.ol-q').value, k = +ln.querySelector('.ol-k').value;
+    if (String(m.unidad).toLowerCase() === 'kg' && q > 0 && k > 0) f.value = Math.round(k / q * 1e4) / 1e4; else if (auto) f.value = 1; }
+}
+function sheetOCB() {
+  openModal('Nueva OC de bodega', `<form data-form="ocb">
+    <div class="card" style="box-shadow:none;background:var(--accent-soft);border-color:transparent">
+      <strong>Documento de la OC</strong>
+      <span class="small">Adjunta el PDF o una foto de la orden de compra: queda guardado. La IA lee el documento y llena las líneas; revísalas antes de guardar.</span>
+      <div class="row"><input type="file" id="ocb-file" accept="application/pdf,image/*" style="flex:1;min-width:0"><button type="button" class="btn" data-act="ocb-ia">Leer con IA</button></div>
+      <label class="check small"><input type="checkbox" id="ocb-guardar" checked> Guardar el documento</label>
+      <div id="ocb-msg" class="small" role="status"></div></div>
+    <input type="hidden" name="tipo_doc" id="ocb-tipo" value="orden_compra"><input type="hidden" name="neto" id="ocb-neto"><input type="hidden" name="ia" id="ocb-ia-f" value="">
+    <div class="fgrid"><label class="f"><span>N° de OC</span><input type="text" name="numero" id="ocb-num"></label>
+      <label class="f"><span>Proveedor</span><input type="text" name="proveedor" id="ocb-prov"></label>
+      <label class="f"><span>Fecha</span><input type="date" name="fecha" id="ocb-f" value="${hoy()}"></label>
+      <label class="f"><span>Total con IVA $</span><input type="number" name="total" id="ocb-tot" step="any" min="0"></label></div>
+    <div class="label">Líneas</div>
+    <div id="ocb-lineas" style="display:grid;gap:8px">${ocbLineaHtml()}</div>
+    <datalist id="unidades">${['un', 'kg', 'm', 'm2', 'tira', 'plancha', 'barra', 'tubo', 'lt', 'gl', 'juego', 'caja', 'rollo'].map(u => `<option value="${u}">`).join('')}</datalist>
+    <button type="button" class="btn ghost" data-act="ocl-add">+ Agregar línea</button>
+    <p class="small muted">Elige a qué material de bodega corresponde cada línea: así la app sabe qué viene en camino y suma el stock al recibir. Si el material se compra en otra unidad (ej.: OC en «tira» y bodega en «m»), indica la equivalencia. Si no existe, puedes crearlo.</p>
+    <button class="btn pri xl">Guardar OC</button></form>`,
+    sh => { const h = e => { const ln = e.target.closest('.ol'); if (ln && e.target.matches('.ol-m,.ol-u,.ol-q,.ol-k')) ocbSync(ln); }; sh.addEventListener('change', h); sh.addEventListener('input', h); });
+}
+function sheetOCBVer(id) {
+  const c = byId(S.d.compras, id), ls = S.d.oc_lineas.filter(l => l.compra_id === id), verP = verCostos() || role() === 'bodega', ds = docsDe(null, id);
+  openModal(`OC ${c.numero || 's/n'}`, `<div class="small muted">${esc(c.proveedor || '')} · ${fechaTxt(c.fecha)}${c.estado === 'recibida' ? ` · recibida ${fechaTxt(c.fecha_recepcion)}` : ''}${verP && c.total ? ` · total ${clp(c.total)}` : ''}</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Línea</th><th class="n">Pedido</th><th class="n">Recibido</th><th class="n">Pendiente</th></tr></thead><tbody>
+    ${ls.map(l => { const m = l.material_id ? byId(S.d.materiales, l.material_id) : null, pd = Math.max(0, +l.cantidad - +l.recibido);
+      return `<tr><td style="white-space:normal">${esc(l.descripcion)}<div class="tiny muted">${m ? '→ ' + esc(m.nombre) + (+l.factor !== 1 ? ` (1 ${esc(l.unidad)} = ${num(l.factor, 2)} ${esc(m.unidad)})` : '') : '<span class="chip warn">sin material asignado</span>'}</div></td>
+        <td class="n">${num(l.cantidad, 2)} ${esc(l.unidad)}</td><td class="n">${num(l.recibido, 2)}</td><td class="n">${pd > 1e-4 ? `<strong>${num(pd, 2)}</strong>` : '<span class="chip ok">Completa</span>'}</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="row">${ds.map(docBtn).join('') || `<button class="btn ghost" data-act="doc-new" data-ot="" data-compra="${id}">Adjuntar documento</button>`}
+      ${c.estado !== 'recibida' && puedeRecibir() ? `<button class="btn pri" data-act="ocb-recibir" data-id="${id}">Acusar recepción</button>` : ''}
+      ${verCostos() && !ls.some(l => +l.recibido > 0) ? `<button class="btn ghost danger" data-act="ocb-del" data-id="${id}">Eliminar OC</button>` : ''}</div>`);
+}
+function sheetRecibirOC(id) {
+  const c = byId(S.d.compras, id), ls = S.d.oc_lineas.filter(l => l.compra_id === id && +l.recibido < +l.cantidad - 1e-4);
+  openModal(`Acusar recepción · OC ${c.numero || 's/n'}`, `<form data-form="ocb-rec"><input type="hidden" name="id" value="${id}">
+    <p class="small muted">Escribe lo que llegó de cada línea (por defecto, todo lo pendiente). Lo que no llegó queda pendiente y la OC pasa a «Parcial». Al confirmar, el material suma al stock de bodega.</p>
+    <div class="list">${ls.map(l => { const m = l.material_id ? byId(S.d.materiales, l.material_id) : null, pd = r2(+l.cantidad - +l.recibido), dif = m && String(m.unidad).toLowerCase() !== String(l.unidad).toLowerCase();
+      return `<div class="rc card" data-lid="${l.id}" style="padding:10px;gap:8px;box-shadow:none"><div><strong>${esc(l.descripcion)}</strong><div class="small muted">Pendiente ${num(pd, 2)} ${esc(l.unidad)}${m ? ' → ' + esc(m.nombre) : ''}</div></div>
+        ${m ? '' : `<label class="f"><span>Material de bodega donde entra</span><select class="rc-m"><option value="">Elegir…</option>${S.d.materiales.filter(x => x.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(x => `<option value="${x.id}">${esc(x.codigo ? x.codigo + ' · ' : '')}${esc(x.nombre)} (${esc(x.unidad)})</option>`).join('')}</select></label>
+          <label class="f"><span>Equivalencia: 1 ${esc(l.unidad)} = ? unidades del material</span><input type="number" class="rc-f" step="any" min="0" value="${l.factor || 1}" inputmode="decimal"></label>`}
+        ${dif ? `<input type="hidden" class="rc-f" value="${l.factor}"><div class="tiny muted">1 ${esc(l.unidad)} = ${num(l.factor, 2)} ${esc(m.unidad)}</div>` : ''}
+        <label class="f"><span>Recibido (${esc(l.unidad)})</span><input type="number" class="rc-q" step="any" min="0" max="${pd}" value="${pd}" inputmode="decimal"></label></div>`; }).join('')}</div>
+    <button class="btn pri xl">Confirmar recepción</button></form>`);
+}
+
 /* ---------------- DOCUMENTOS */
 async function guardarDoc(file, {ot_id, compra_id = null, tipo = 'otro', nota = null}) {
   if (file.size > 50 * 1024 * 1024) throw new Error('El archivo pesa más de 50 MB');
@@ -1448,12 +1574,12 @@ async function guardarDoc(file, {ot_id, compra_id = null, tipo = 'otro', nota = 
   try { return await DB.ins('documentos', {ot_id, compra_id, tipo, nota, nombre: file.name || 'documento', path, mime: file.type || null, tamano: file.size}); }
   catch (e) { await DB.borrarArchivo(path).catch(() => {}); throw e; }
 }
-const docsDe = (otId, compraId) => S.d.documentos.filter(d => d.ot_id === otId && (compraId === undefined || d.compra_id === compraId)).sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
+const docsDe = (otId, compraId) => S.d.documentos.filter(d => (d.ot_id ?? null) === (otId ?? null) && (compraId === undefined || d.compra_id === compraId)).sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
 const docBtn = d => `<button class="btn ghost" style="padding-inline:6px" data-act="doc-ver" data-id="${d.id}" title="${esc(d.nombre)}">Ver ${esc((TIPOS_DOC[d.tipo] || 'documento').toLowerCase())}</button>`;
 function sheetDoc(otId, compraId) {
-  const o = otOf(otId), c = compraId ? byId(S.d.compras, compraId) : null;
+  const o = otId ? otOf(otId) : null, c = compraId ? byId(S.d.compras, compraId) : null;
   openModal('Subir documento', `<form data-form="doc"><input type="hidden" name="ot" value="${otId}"><input type="hidden" name="compra" value="${compraId || ''}">
-    <div class="small muted"><span class="ot">${esc(o.numero)}</span> ${c ? `· compra ${esc(c.numero || '')} ${esc(c.proveedor || '')}` : esc(o.descripcion || '')}</div>
+    <div class="small muted">${o ? `<span class="ot">${esc(o.numero)}</span> ` : ''}${c ? `${o ? '· ' : 'OC de bodega · '}compra ${esc(c.numero || '')} ${esc(c.proveedor || '')}` : esc(o?.descripcion || '')}</div>
     <label class="f"><span>Tipo</span><select name="tipo" id="dc-t">${Object.entries(TIPOS_DOC).map(([k, l]) => `<option value="${k}" ${(c ? 'orden_compra' : 'plano') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="f"><span>Archivo (PDF, foto, Excel…; máximo 50 MB)</span><input type="file" name="file" id="dc-f" required></label>
     <label class="f"><span>Nota (opcional)</span><input type="text" name="nota" id="dc-n"></label>
@@ -1869,6 +1995,30 @@ const ACT = {
   'ln-add': () => { document.getElementById('co-lineas').insertAdjacentHTML('beforeend', lineaHtml()); },
   'ln-del': el => { const box = document.getElementById('co-lineas'); if (box.children.length > 1) el.closest('.ln').remove(); else el.closest('.ln').querySelectorAll('input').forEach(i => i.value = i.classList.contains('ln-u') ? 'un' : ''); },
   'co-est': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); document.getElementById('co-estado').value = el.dataset.k; },
+  'ocb-new': () => sheetOCB(),
+  'ocb-ver': el => sheetOCBVer(+el.dataset.id),
+  'ocb-recibir': el => sheetRecibirOC(+el.dataset.id),
+  'ocl-add': () => { document.getElementById('ocb-lineas').insertAdjacentHTML('beforeend', ocbLineaHtml()); },
+  'ocl-del': el => { const box = document.getElementById('ocb-lineas'); if (box.children.length > 1) el.closest('.ol').remove(); else { const ln = el.closest('.ol'); ln.querySelectorAll('input:not([type=hidden])').forEach(i => i.value = i.classList.contains('ol-u') ? 'un' : ''); ln.querySelector('.ol-m').value = ''; ocbSync(ln); } },
+  'ocb-del': el => openModal('Eliminar OC', `<p>Se elimina la OC con sus líneas. Solo es posible si no se ha recibido nada.</p><div class="row"><button class="btn danger" data-act="ocb-del-ok" data-id="${el.dataset.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`),
+  'ocb-del-ok': el => run(() => DB.del('compras', +el.dataset.id), 'OC eliminada'),
+  'ocb-ia': async el => {
+    const f = document.getElementById('ocb-file').files[0], msg = document.getElementById('ocb-msg');
+    if (!f && !DEMO) return toast('Primero elige el archivo de la OC');
+    if (f && f.size > 15 * 1024 * 1024) return toast('El archivo es muy pesado (máximo 15 MB)');
+    el.disabled = true; msg.textContent = 'Leyendo el documento… puede tardar unos 20 segundos.';
+    try {
+      const a = f ? await archivoB64(f) : {}, r = await DB.leerOC(a.b64, a.tipo);
+      const set = (id, v) => { if (v != null && v !== '') document.getElementById(id).value = v; };
+      set('ocb-num', r.numero); set('ocb-prov', r.proveedor); if (TIPOS_DOC[r.tipo]) set('ocb-tipo', r.tipo); set('ocb-f', r.fecha); set('ocb-tot', r.total); set('ocb-neto', r.neto);
+      document.getElementById('ocb-ia-f').value = '1';
+      const box = document.getElementById('ocb-lineas'); let ok = 0;
+      box.innerHTML = (r.items || []).map(it => { const m = matchMaterial(it.descripcion, it.codigo); if (m) ok++; return ocbLineaHtml({...it, codigo: it.codigo, material_id: m?.id, precio_unitario_neto: it.precio_unitario_neto || ''}); }).join('') || ocbLineaHtml();
+      box.querySelectorAll('.ol').forEach(ln => ocbSync(ln, true));
+      const n = (r.items || []).length;
+      msg.innerHTML = `<strong>${n} líneas leídas</strong>${n ? `, ${ok} asignadas a un material de bodega` : ''}. Revisa material, cantidades y precios antes de guardar.${(r.advertencias || []).length ? '<br>' + r.advertencias.map(esc).join('<br>') : ''}`;
+    } catch (e) { msg.textContent = errTxt(e); } finally { el.disabled = false; }
+  },
   'compra-ia': async el => {
     const f = document.getElementById('co-file').files[0], msg = document.getElementById('co-ia-msg');
     if (!f && !DEMO) return toast('Primero elige el archivo de la OC');
@@ -2068,6 +2218,37 @@ const FORMS = {
       }
     }, `Compra guardada con ${lineas.length} líneas en el stock de ${otOf(ot).numero}`);
   },
+  ocb(fd) {
+    const n = k => fd.get(k) === '' || fd.get(k) == null ? null : +fd.get(k);
+    const lns = [...document.querySelectorAll('#ocb-lineas .ol')].map(el => ({d: el.querySelector('.ol-d').value.trim(), c: el.querySelector('.ol-c').value || null, m: el.querySelector('.ol-m').value, q: +el.querySelector('.ol-q').value,
+      u: el.querySelector('.ol-u').value.trim().toLowerCase() || 'un', p: el.querySelector('.ol-p').value, k: el.querySelector('.ol-k').value, f: +el.querySelector('.ol-f').value || 1})).filter(x => x.d || x.q);
+    if (!lns.length) return toast('Agrega al menos una línea');
+    if (lns.some(x => !x.d || !(x.q > 0))) return toast('Cada línea necesita descripción y cantidad');
+    return run(async () => {
+      const c = await DB.ins('compras', {ot_id: null, numero: fd.get('numero') || null, proveedor: fd.get('proveedor') || null, fecha: fd.get('fecha') || hoy(), estado: 'pedida', total: n('total'), neto: n('neto'), leida_con_ia: fd.get('ia') === '1'});
+      const rows = [];
+      for (const x of lns) {
+        const precio = x.p === '' || +x.p === 0 ? null : +x.p, kgu = x.k !== '' && +x.k > 0 ? Math.round(+x.k / x.q * 1e4) / 1e4 : x.u === 'kg' ? 1 : null;
+        let mid = /^\d+$/.test(x.m) ? +x.m : null, factor = mid ? x.f : 1;
+        if (x.m === 'new') { const nm = await DB.ins('materiales', {codigo: x.c, nombre: x.d, unidad: x.u, costo_unit: precio, costo_estimado: false, kg_unidad: kgu, stock: 0, stock_min: 0, activo: true}); mid = nm.id; }
+        rows.push({compra_id: c.id, material_id: mid, codigo: x.c, descripcion: x.d, unidad: x.u, cantidad: x.q, costo_unit: precio, kg_unidad: kgu, factor});
+      }
+      await DB.insMany('oc_lineas', rows);
+      S.ui.bodTab = 'compras';
+      const f = document.getElementById('ocb-file')?.files[0];
+      if (f && document.getElementById('ocb-guardar')?.checked) {
+        try { await guardarDoc(f, {ot_id: null, compra_id: c.id, tipo: fd.get('tipo_doc') || 'orden_compra'}); }
+        catch (e) { setTimeout(() => toast('La OC se guardó, pero el documento no se pudo subir: ' + errTxt(e)), 400); }
+      }
+    }, 'OC guardada. Cuando llegue el material, usa «Acusar recepción».');
+  },
+  'ocb-rec'(fd) {
+    const id = +fd.get('id'), lineas = [...document.querySelectorAll('.rc')].map(el => ({id: +el.dataset.lid, cantidad: +el.querySelector('.rc-q').value || 0, material_id: el.querySelector('.rc-m')?.value || null,
+      factor: el.querySelector('.rc-f') ? +el.querySelector('.rc-f').value || 1 : null}));
+    const dado = lineas.filter(x => x.cantidad > 0); if (!dado.length) return toast('Escribe la cantidad recibida de al menos una línea');
+    const sin = dado.find(x => { const l = byId(S.d.oc_lineas, x.id); return !l.material_id && !x.material_id; }); if (sin) return toast('Elige el material de bodega de las líneas que recibes');
+    return run(() => DB.rpc('recibir_oc', {p_compra: id, p_lineas: dado}), 'Recepción registrada: el material ya está en el stock');
+  },
   'salida-dia'(fd) {
     const ot = +fd.get('ot'), rows = [];
     for (const l of S.d.ot_stock.filter(x => x.ot_id === ot)) { const v = fd.get('q-' + l.id); if (v === null || v === '' || !(+v > 0)) continue;
@@ -2084,7 +2265,7 @@ const FORMS = {
   },
   doc(fd) {
     const f = fd.get('file'); if (!f || !f.size) return toast('Elige el archivo');
-    return run(() => guardarDoc(f, {ot_id: +fd.get('ot'), compra_id: +fd.get('compra') || null, tipo: fd.get('tipo'), nota: fd.get('nota') || null}), 'Documento guardado en la OT');
+    return run(() => guardarDoc(f, {ot_id: +fd.get('ot') || null, compra_id: +fd.get('compra') || null, tipo: fd.get('tipo'), nota: fd.get('nota') || null}), 'Documento guardado');
   },
   linea(fd) {
     const id = +fd.get('id'), row = {descripcion: fd.get('desc').trim(), kg_unidad: fd.get('kgu') === '' ? null : +fd.get('kgu')};

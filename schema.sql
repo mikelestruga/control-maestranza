@@ -878,6 +878,73 @@ create policy tih_leer on tipos_item_hist for select to authenticated using (mi_
 revoke all on tipos_item_hist from anon, authenticated;
 grant select on tipos_item_hist to authenticated;
 
+-- ---------- Órdenes de compra de bodega (con recepción parcial o total) ----
+-- Una compra sin OT (ot_id null) es una OC para reponer la bodega general. Sus líneas
+-- apuntan a un material del catálogo; al acusar recepción entran a stock_ingresos.
+alter table compras alter column ot_id drop not null;
+alter table compras drop constraint if exists compras_estado_check;
+alter table compras add constraint compras_estado_check check (estado in ('pedida','parcial','recibida'));
+alter table documentos alter column ot_id drop not null;
+create table if not exists oc_lineas (
+  id bigint generated always as identity primary key,
+  compra_id bigint not null references compras(id) on delete cascade,
+  material_id bigint references materiales(id),
+  codigo text,
+  descripcion text not null,
+  unidad text not null default 'un',
+  cantidad numeric not null check (cantidad > 0),
+  recibido numeric not null default 0 check (recibido >= 0),
+  costo_unit numeric check (costo_unit >= 0),          -- neto por unidad de la OC; null = pendiente
+  kg_unidad numeric check (kg_unidad >= 0),            -- kg por unidad de la OC
+  factor numeric not null default 1 check (factor > 0), -- unidades del material por cada unidad de la OC
+  creado timestamptz not null default now()
+);
+create index if not exists oc_lineas_compra on oc_lineas (compra_id);
+create index if not exists oc_lineas_material on oc_lineas (material_id);
+alter table oc_lineas enable row level security;
+drop policy if exists ocl_leer on oc_lineas;   drop policy if exists ocl_crear on oc_lineas;
+drop policy if exists ocl_editar on oc_lineas; drop policy if exists ocl_borrar on oc_lineas;
+create policy ocl_leer   on oc_lineas for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy ocl_crear  on oc_lineas for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy ocl_editar on oc_lineas for update to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin')) with check (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy ocl_borrar on oc_lineas for delete to authenticated using (mi_rol() in ('admin','gerencia'));
+revoke all on oc_lineas from anon, authenticated;
+grant select, insert, update, delete on oc_lineas to authenticated;
+
+-- Acusar recepción: p_lineas = [{"id":…, "cantidad":…, "material_id":…, "factor":…}]
+create or replace function recibir_oc(p_compra bigint, p_lineas jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare c compras%rowtype; x jsonb; l oc_lineas%rowtype; q numeric; mat bigint; f numeric; n int := 0; pend int;
+begin
+  if mi_rol() not in ('bodega','gerencia','admin') then raise exception 'Sin permiso para acusar recepción'; end if;
+  select * into c from compras where id = p_compra for update;
+  if not found or c.ot_id is not null then raise exception 'La compra no es una OC de bodega'; end if;
+  for x in select * from jsonb_array_elements(p_lineas) loop
+    q := nullif(x->>'cantidad','')::numeric;
+    if q is null or q <= 0 then continue; end if;
+    select * into l from oc_lineas where id = (x->>'id')::bigint and compra_id = p_compra for update;
+    if not found then raise exception 'Línea no encontrada'; end if;
+    if q > l.cantidad - l.recibido + 0.0001 then raise exception 'Recibido mayor a lo pendiente: %', l.descripcion; end if;
+    mat := coalesce(nullif(x->>'material_id','')::bigint, l.material_id);
+    if mat is null then raise exception 'Falta asignar un material a: %', l.descripcion; end if;
+    f := coalesce(nullif(x->>'factor','')::numeric, l.factor);
+    if f <= 0 then raise exception 'Equivalencia inválida en: %', l.descripcion; end if;
+    update oc_lineas set recibido = recibido + q, material_id = mat, factor = f where id = l.id;
+    insert into stock_ingresos (material_id, cantidad, costo_unit, kg, doc_ref)
+    values (mat, round(q * f, 4), case when l.costo_unit is not null then round(l.costo_unit / f, 4) end,
+            case when l.kg_unidad is not null then round(q * l.kg_unidad, 2) end,
+            'OC ' || coalesce(c.numero, 's/n') || coalesce(' · ' || c.proveedor, ''));
+    n := n + 1;
+  end loop;
+  if n = 0 then raise exception 'No hay cantidades para recibir'; end if;
+  select count(*) into pend from oc_lineas where compra_id = p_compra and recibido < cantidad - 0.0001;
+  update compras set estado = case when pend = 0 then 'recibida' else 'parcial' end,
+                     fecha_recepcion = case when pend = 0 then current_date else fecha_recepcion end
+   where id = p_compra;
+end $$;
+revoke all on function recibir_oc(bigint, jsonb) from public, anon;
+grant execute on function recibir_oc(bigint, jsonb) to authenticated;
+
 -- ---------- Ítems de cada OT (nombre, unidad piezas/metros, cantidad y kg) ----
 create table if not exists ot_items (
   id bigint generated always as identity primary key,
@@ -945,8 +1012,9 @@ begin
          || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'stock_ingresos' then x := coalesce((select nombre from materiales where id = (r->>'material_id')::bigint), '?') || ' · ' || coalesce(r->>'cantidad','') || ' un';
   elsif t = 'ot_stock' then x := coalesce(r->>'descripcion','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
-  elsif t = 'compras' then x := coalesce(r->>'numero','s/n') || ' · ' || coalesce(r->>'proveedor','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
-  elsif t = 'documentos' then x := coalesce(r->>'nombre','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+  elsif t = 'compras' then x := coalesce(r->>'numero','s/n') || ' · ' || coalesce(r->>'proveedor','') || ' · ' || case when r->>'ot_id' is null then 'Bodega' else 'OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?') end;
+  elsif t = 'oc_lineas' then x := coalesce(r->>'descripcion','') || ' · OC ' || coalesce((select numero from compras where id = (r->>'compra_id')::bigint), 's/n');
+  elsif t = 'documentos' then x := coalesce(r->>'nombre','') || ' · ' || case when r->>'ot_id' is null then 'Bodega' else 'OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?') end;
   elsif t = 'ot_items' then x := coalesce(r->>'nombre','') || ' · ' || coalesce(r->>'cantidad','') || case when r->>'unidad' = 'm' then ' m' else ' pza' end || coalesce(' · ' || (r->>'kg') || ' kg', '') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'maquina_uso' then x := coalesce((select nombre from maquinas where id = (r->>'maquina_id')::bigint), '?') || ' · ' || coalesce(r->>'horas','') || ' h · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'produccion' then x := 'OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?') || ' · ' || coalesce(r->>'kg','') || ' kg';
@@ -986,7 +1054,7 @@ begin
     when 'hh_registros' then 'Horas hombre' when 'asistencia' then 'Horas hombre'
     when 'materiales' then 'Materiales'
     when 'consumos' then 'Bodega' when 'stock_ingresos' then 'Bodega' when 'ot_stock' then 'Bodega'
-    when 'compras' then 'Compras y documentos' when 'documentos' then 'Compras y documentos'
+    when 'compras' then 'Compras y documentos' when 'documentos' then 'Compras y documentos' when 'oc_lineas' then 'Compras y documentos'
     when 'servicios' then 'Pintura y servicios'
     when 'maquina_uso' then 'Máquinas'
     when 'tarifas' then 'Costos y tarifas' when 'maquinas' then 'Costos y tarifas' when 'procesos' then 'Costos y tarifas' when 'tipos_item' then 'Costos y tarifas'
@@ -1005,7 +1073,7 @@ end $$;
 
 do $$ declare x record; begin
   for x in select * from (values ('ots','todo'),('ot_ppto','todo'),('produccion','todo'),('ot_items','todo'),('tipos_item','todo'),('maquina_uso','todo'),('hh_registros','cambios'),('asistencia','cambios'),
-      ('materiales','todo'),('consumos','cambios'),('stock_ingresos','todo'),('ot_stock','cambios'),('compras','todo'),('documentos','todo'),
+      ('materiales','todo'),('consumos','cambios'),('stock_ingresos','todo'),('ot_stock','cambios'),('compras','todo'),('oc_lineas','cambios'),('documentos','todo'),
       ('servicios','cambios'),('tarifas','todo'),('maquinas','todo'),('procesos','todo'),('perfiles','cambios'),('config','todo'),
       ('operaciones','todo'),('dias_especiales','todo')) as v(t, m)
   loop
