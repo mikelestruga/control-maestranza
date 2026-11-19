@@ -702,7 +702,7 @@ const Cloud = (() => {
           sin_usuario: 'No se encontró ese usuario.', usuario_invalido: 'El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo, sin espacios.', usuario_existe: 'Ya existe otro usuario con ese nombre.', usuario_igual: 'Ese ya es su nombre de usuario.', clave_incorrecta: 'Tu clave no es correcta.', a_si_mismo: 'No puedes eliminar tu propio usuario.',
           ultimo_admin: 'No se puede eliminar al único administrador.',
           tiene_historial: 'Este trabajador tiene horas o registros en la app. Eliminarlo borraría costos de las OT: mejor desmárcalo como Activo.'})[code]
-          || (st === 404 ? 'La función gestionar-usuarios no está instalada en Supabase.' : 'No se pudo completar la acción.')); }
+          || (st === 404 ? 'La función gestionar-usuarios no está instalada en Supabase.' : 'No se pudo completar la acción. Detalle técnico: ' + [st && 'estado ' + st, code, det].filter(Boolean).join(' · ') + (code ? '' : ' (la función no respondió como se esperaba: revisa que esté publicada con el código más reciente)'))); }
       return data;
     },
     async leerOT(archivo, tipo) {
