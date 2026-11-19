@@ -2014,9 +2014,6 @@ const ACT = {
     mostrar('');
     if (!isAdmin()) return toast('Solo el administrador puede cambiar claves');
     if (clave.length < 6) return mostrar('Clave demasiado corta: mínimo 6 caracteres.');
-    const u = String(p?.usuario || '').toLowerCase(), cl = clave.toLowerCase();
-    const debil = /^\d+$/.test(clave) || /^(.)\1+$/.test(clave) || (u.length >= 3 && cl.includes(u)) || ['password', 'contrasena', 'clave123', 'qwerty', 'abc123', 'taller', 'imt123', '123456', '12345678'].some(w => cl.includes(w)) || (clave.length < 8 && !(/[a-z]/i.test(clave) && /\d/.test(clave)));
-    if (debil) return mostrar('Clave demasiado débil. Usa 8 o más caracteres con letras y números, sin el nombre de usuario.');
     el.disabled = true;
     try { await DB.cambiarClave(el.dataset.id, clave); toast(`Clave de ${p?.usuario || 'usuario'} cambiada`); closeModal(); await reload(); }
     catch (e) { if (e.debil) mostrar('Clave demasiado débil. Usa 8 o más caracteres con letras y números, sin el nombre de usuario.'); else if (e.misma) mostrar(e.message); else toast(errTxt(e)); }
