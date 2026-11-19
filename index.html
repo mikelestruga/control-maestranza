@@ -188,7 +188,9 @@ const CONFIG = {
   SUPABASE_URL: 'https://jzkwhsgquunwbtodgrxx.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_U4TxDp33bdkDt15d5VGGMQ_dUm5l2QL',
   DOMINIO_USUARIOS: 'taller.local',   // usuario "jperez" entra como jperez@taller.local
-  EMPRESA: 'IMT Ingeniería'
+  EMPRESA: 'IMT Ingeniería',
+  // Nombre con que está publicada cada función en Supabase › Edge Functions (el panel les pone nombres automáticos)
+  FUNCIONES: {usuarios: 'smooth-service', oc: 'leer-oc', ot: 'leer-ot'}
 };
 </script>
 <script>
@@ -684,7 +686,7 @@ const Cloud = (() => {
     async urlDoc(path) { const {data, error} = await sb.storage.from('documentos').createSignedUrl(path, 3600); if (error) throw error; return data.signedUrl; },
     async borrarArchivo(path) { await sb.storage.from('documentos').remove([path]); },
     async leerOC(archivo, tipo) {
-      const {data, error} = await sb.functions.invoke('leer-oc', {body: {archivo, tipo}});
+      const {data, error} = await sb.functions.invoke(CONFIG.FUNCIONES.oc, {body: {archivo, tipo}});
       if (error) { let code = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; } catch (e) {}
         throw new Error(({tope: 'Se alcanzó el tope diario de lecturas con IA. Ingresa las líneas a mano o prueba mañana.', sin_permiso: 'Tu usuario no tiene permiso para leer documentos con IA.',
           sin_clave: 'Falta la clave de IA en Supabase (secreto ANTHROPIC_API_KEY).', muy_pesado: 'El archivo es muy pesado (máximo 15 MB).', anthropic: 'El servicio de IA no respondió. Inténtalo de nuevo.'})[code]
@@ -692,7 +694,7 @@ const Cloud = (() => {
       return data.compra;
     },
     async gestionarUsuario(body) {
-      const {data, error} = await sb.functions.invoke('gestionar-usuarios', {body});
+      const {data, error} = await sb.functions.invoke(CONFIG.FUNCIONES.usuarios, {body});
       if (error) { let code = '', det = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; det = b.detalle || ''; } catch (e) {}
         if (code === 'no_se_pudo' && /same.?password|different from the old/i.test(det)) { const er = new Error('Esa es la misma clave que ya tiene el usuario. Elige una distinta.'); er.misma = true; throw er; }
         if (code === 'no_se_pudo' && /weak|guess|pwned|breach|common/i.test(det)) { const er = new Error('Clave demasiado débil. Usa 8 o más caracteres con letras y números.'); er.debil = true; throw er; }
@@ -706,7 +708,7 @@ const Cloud = (() => {
       return data;
     },
     async leerOT(archivo, tipo) {
-      const {data, error} = await sb.functions.invoke('leer-ot', {body: {archivo, tipo}});
+      const {data, error} = await sb.functions.invoke(CONFIG.FUNCIONES.ot, {body: {archivo, tipo}});
       if (error) { let code = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; } catch (e) {}
         throw new Error(({tope: 'Se alcanzó el tope diario de lecturas con IA. Crea la OT a mano o prueba mañana.', sin_permiso: 'Tu usuario no tiene permiso para leer documentos con IA.',
           sin_clave: 'Falta la clave de IA en Supabase (secreto ANTHROPIC_API_KEY).', muy_pesado: 'El archivo es muy pesado (máximo 15 MB).', anthropic: 'El servicio de IA no respondió. Inténtalo de nuevo.'})[code]
