@@ -688,8 +688,9 @@ const Cloud = (() => {
     async gestionarUsuario(body) {
       const {data, error} = await sb.functions.invoke('gestionar-usuarios', {body});
       if (error) { let code = '', det = '', st = error.context?.status; try { const b = await error.context.json(); code = b.error; det = b.detalle || ''; } catch (e) {}
-        if (code === 'no_se_pudo') throw new Error(/weak|guess|pwned|breach|common/i.test(det) ? 'Supabase rechazó la clave por ser fácil de adivinar. Usa una más larga (8 o más) con letras y números.'
-          : /at least|short|length/i.test(det) ? 'La clave es muy corta para la configuración de Supabase. Usa una más larga.' : /not.?found|no user/i.test(det) ? 'Ese usuario no existe en el sistema de acceso de Supabase.'
+        if (code === 'no_se_pudo' && /same.?password|different from the old/i.test(det)) { const er = new Error('Esa es la misma clave que ya tiene el usuario. Elige una distinta.'); er.misma = true; throw er; }
+        if (code === 'no_se_pudo' && /weak|guess|pwned|breach|common/i.test(det)) { const er = new Error('Clave demasiado débil. Usa 8 o más caracteres con letras y números.'); er.debil = true; throw er; }
+        if (code === 'no_se_pudo') throw new Error( /at least|short|length/i.test(det) ? 'La clave es muy corta para la configuración de Supabase. Usa una más larga.' : /not.?found|no user/i.test(det) ? 'Ese usuario no existe en el sistema de acceso de Supabase.'
           : 'No se pudo cambiar la clave' + (det ? ': ' + det : '.'));
         throw new Error(({sin_permiso: 'Solo el administrador puede hacer esto.', clave_corta: 'La clave debe tener al menos 6 caracteres.', no_autenticado: 'Tu sesión venció. Vuelve a entrar.',
           sin_usuario: 'No se encontró ese usuario.', clave_incorrecta: 'Tu clave no es correcta.', a_si_mismo: 'No puedes eliminar tu propio usuario.',
@@ -1873,7 +1874,8 @@ function sheetCat(k, id) {
       <p class="small muted">Entrega el usuario y la clave al trabajador. Después puedes cambiarla abriendo su ficha en Ajustes › Trabajadores.</p>` : ''}
     ${k === 'trabajadores' && id != null && isAdmin() ? `<div class="card" style="margin:12px 0"><div class="label">Cambiar clave de ${esc(r.usuario || '')}</div>
       <div class="row" style="align-items:end"><label class="f" style="flex:1"><span>Clave nueva (mínimo 6)</span><input type="text" id="c-clave-nueva" autocomplete="off" autocapitalize="off" minlength="6"></label>
-      <button type="button" class="btn" data-act="clave-set" data-id="${esc(id)}">Cambiar clave</button></div>
+      <button type="button" class="btn ghost" data-act="clave-gen">Generar</button><button type="button" class="btn" data-act="clave-set" data-id="${esc(id)}">Cambiar clave</button></div>
+      <p id="c-clave-msg" class="small" style="color:var(--bad,#b42318);margin:4px 0 0;font-weight:600" role="alert" hidden></p>
       <p class="tiny muted">Solo el administrador puede hacerlo. Entrégale la clave nueva al trabajador.</p></div>` : ''}
     <div class="row"><button class="btn pri">Guardar</button>${id != null && k !== 'trabajadores' ? `<button type="button" class="btn danger" data-act="cat-del" data-k="${k}" data-id="${esc(id)}">Eliminar</button>` : ''}${id != null && k === 'trabajadores' && isAdmin() && id !== S.me.id ? `<button type="button" class="btn danger" data-act="usr-del" data-id="${esc(id)}">Eliminar trabajador</button>` : ''}</div></form>`, k === 'tarifas' ? tarifaAuto : undefined);
 }
@@ -1985,12 +1987,22 @@ const ACT = {
       <p class="small muted">Si tiene horas o registros en la app, no se podrá eliminar para no perder los costos de las OT; en ese caso desmárcalo como Activo.</p>
       <label class="f"><span>Para confirmar, escribe TU clave de administrador</span><input type="password" name="clave" id="ud-clave" autocomplete="current-password" required></label>
       <div class="row"><button class="btn danger">Eliminar definitivamente</button><button type="button" class="btn" data-act="close">Cancelar</button></div></form>`); },
-  'clave-set': el => {
-    const clave = (document.getElementById('c-clave-nueva')?.value || '').trim();
-    if (clave.length < 6) return toast('La clave debe tener al menos 6 caracteres');
+  'clave-gen': () => { const A = 'abcdefghjkmnpqrstuvwxyz', N = '23456789', r = n => crypto.getRandomValues(new Uint32Array(n)), pick = (set, v) => set[v % set.length];
+    const v = r(8), c = [...Array(5)].map((_, i) => pick(A, v[i])).concat([pick(N, v[5]), pick(N, v[6]), pick(N, v[7])]).sort(() => 0.5 - Math.random()).join('');
+    const i = document.getElementById('c-clave-nueva'); i.value = c; document.getElementById('c-clave-msg').hidden = true; i.select(); toast('Clave generada: ' + c + ' · presiona «Cambiar clave» y anótala para entregarla'); },
+  'clave-set': async el => {
+    const inp = document.getElementById('c-clave-nueva'), msg = document.getElementById('c-clave-msg'), clave = (inp?.value || '').trim(), p = byId(S.d.perfiles, el.dataset.id);
+    const mostrar = t => { msg.textContent = t; msg.hidden = !t; inp.setAttribute('aria-invalid', t ? 'true' : 'false'); if (t) inp.focus(); };
+    mostrar('');
     if (!isAdmin()) return toast('Solo el administrador puede cambiar claves');
-    const p = byId(S.d.perfiles, el.dataset.id);
-    return run(() => DB.cambiarClave(el.dataset.id, clave), `Clave de ${p?.usuario || 'usuario'} cambiada`);
+    if (clave.length < 6) return mostrar('Clave demasiado corta: mínimo 6 caracteres.');
+    const u = String(p?.usuario || '').toLowerCase(), cl = clave.toLowerCase();
+    const debil = /^\d+$/.test(clave) || /^(.)\1+$/.test(clave) || (u.length >= 3 && cl.includes(u)) || ['password', 'contrasena', 'clave123', 'qwerty', 'abc123', 'taller', 'imt123', '123456', '12345678'].some(w => cl.includes(w)) || (clave.length < 8 && !(/[a-z]/i.test(clave) && /\d/.test(clave)));
+    if (debil) return mostrar('Clave demasiado débil. Usa 8 o más caracteres con letras y números, sin el nombre de usuario.');
+    el.disabled = true;
+    try { await DB.cambiarClave(el.dataset.id, clave); toast(`Clave de ${p?.usuario || 'usuario'} cambiada`); closeModal(); await reload(); }
+    catch (e) { if (e.debil) mostrar('Clave demasiado débil. Usa 8 o más caracteres con letras y números, sin el nombre de usuario.'); else if (e.misma) mostrar(e.message); else toast(errTxt(e)); }
+    finally { if (el.isConnected) el.disabled = false; }
   },
   'doc-del-ok': el => { const d = byId(S.d.documentos, +el.dataset.id); run(async () => { await DB.del('documentos', d.id); await DB.borrarArchivo(d.path).catch(() => {}); }, 'Documento eliminado'); },
   'stockot-ot': el => { S.ui.stockOt = +el.dataset.id; render(); },
