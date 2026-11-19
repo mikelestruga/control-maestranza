@@ -487,6 +487,12 @@ const Demo = (() => {
     async leerOT() { await new Promise(r => setTimeout(r, 900)); return {numero: 'OT-2650', cliente: 'Minera Ejemplo S.A.', descripcion: 'Fabricación de 8 spools de cañería 6 pulg A106', cantidad: 8, unidad: 'spool', kg_cotizados: 3200, items: [{nombre: 'Spool 6" A106 tipo A', unidad: 'pza', cantidad: 5, kg: 2000}, {nombre: 'Spool 6" A106 tipo B', unidad: 'pza', cantidad: 3, kg: 1200}], fecha_entrega: addDays(hoy(), 21), ppto_horas: 260, precio_venta: 9800000, tipo_documento: 'orden_compra', advertencias: ['Ejemplo de demostración: en la app real se lee tu documento.']}; },
     async auditoria() { return [...T.auditoria].sort((a, b) => b.id - a.id); },
     async cambiarClave() { await new Promise(r => setTimeout(r, 300)); },
+    async cambiarUsuario(id, usuario) {
+      const u = String(usuario || '').trim().toLowerCase();
+      if (!/^[a-z0-9._-]{3,30}$/.test(u)) throw new Error('El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo, sin espacios.');
+      if (T.perfiles.some(p => p.usuario === u && p.id !== id)) throw new Error('Ya existe otro usuario con ese nombre.');
+      await api.upd('perfiles', id, {usuario: u});
+    },
     async eliminarUsuario(id, clave) {
       if (!clave) throw new Error('Tu clave no es correcta.');
       const p = T.perfiles.find(x => x.id === id);
@@ -693,7 +699,7 @@ const Cloud = (() => {
         if (code === 'no_se_pudo') throw new Error( /at least|short|length/i.test(det) ? 'La clave es muy corta para la configuración de Supabase. Usa una más larga.' : /not.?found|no user/i.test(det) ? 'Ese usuario no existe en el sistema de acceso de Supabase.'
           : 'No se pudo cambiar la clave' + (det ? ': ' + det : '.'));
         throw new Error(({sin_permiso: 'Solo el administrador puede hacer esto.', clave_corta: 'La clave debe tener al menos 6 caracteres.', no_autenticado: 'Tu sesión venció. Vuelve a entrar.',
-          sin_usuario: 'No se encontró ese usuario.', clave_incorrecta: 'Tu clave no es correcta.', a_si_mismo: 'No puedes eliminar tu propio usuario.',
+          sin_usuario: 'No se encontró ese usuario.', usuario_invalido: 'El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo, sin espacios.', usuario_existe: 'Ya existe otro usuario con ese nombre.', usuario_igual: 'Ese ya es su nombre de usuario.', clave_incorrecta: 'Tu clave no es correcta.', a_si_mismo: 'No puedes eliminar tu propio usuario.',
           ultimo_admin: 'No se puede eliminar al único administrador.',
           tiene_historial: 'Este trabajador tiene horas o registros en la app. Eliminarlo borraría costos de las OT: mejor desmárcalo como Activo.'})[code]
           || (st === 404 ? 'La función gestionar-usuarios no está instalada en Supabase.' : 'No se pudo completar la acción.')); }
@@ -709,6 +715,7 @@ const Cloud = (() => {
     },
     async auditoria() { const {data, error} = await sb.from('auditoria').select('*').order('id', {ascending: false}).limit(3000); if (error) throw error; return data; },
     cambiarClave(usuario_id, clave) { return this.gestionarUsuario({accion: 'cambiar_clave', usuario_id, clave}); },
+    cambiarUsuario(usuario_id, usuario) { return this.gestionarUsuario({accion: 'cambiar_usuario', usuario_id, usuario}); },
     eliminarUsuario(usuario_id, clave_admin) { return this.gestionarUsuario({accion: 'eliminar', usuario_id, clave_admin}); },
     async hhQuery({desde, hasta, ot}) { let q = () => { let x = sb.from('v_hh').select('*'); if (desde) x = x.gte('fecha', desde); if (hasta) x = x.lte('fecha', hasta); if (ot) x = x.eq('ot_id', ot); return x.order('id'); }; return all(q); }
   };
@@ -1872,7 +1879,11 @@ function sheetCat(k, id) {
     ${nuevoTrab ? `<div class="fgrid"><label class="f"><span>Usuario para entrar</span><input type="text" name="usuario" id="c-usuario" required autocapitalize="off" placeholder="jperez"></label>
       <label class="f"><span>Clave inicial (mínimo 6)</span><input type="text" name="clave" id="c-clave" minlength="6" required></label></div>
       <p class="small muted">Entrega el usuario y la clave al trabajador. Después puedes cambiarla abriendo su ficha en Ajustes › Trabajadores.</p>` : ''}
-    ${k === 'trabajadores' && id != null && isAdmin() ? `<div class="card" style="margin:12px 0"><div class="label">Cambiar clave de ${esc(r.usuario || '')}</div>
+    ${k === 'trabajadores' && id != null && isAdmin() ? `<div class="card" style="margin:12px 0"><div class="label">Usuario para entrar</div>
+      <div class="row" style="align-items:end"><label class="f" style="flex:1"><span>Nombre de usuario</span><input type="text" id="c-usuario-nuevo" value="${esc(r.usuario || '')}" autocomplete="off" autocapitalize="off" maxlength="30"></label>
+        <button type="button" class="btn" data-act="usuario-set" data-id="${esc(id)}">Cambiar usuario</button></div>
+      <p class="tiny muted">Es el nombre con que la persona entra a la app (3 a 30 letras, números, punto, guion o guion bajo, sin espacios). Su clave no cambia: avísale el usuario nuevo.</p></div>
+      <div class="card" style="margin:12px 0"><div class="label">Cambiar clave de ${esc(r.usuario || '')}</div>
       <div class="row" style="align-items:end"><label class="f" style="flex:1"><span>Clave nueva (mínimo 6)</span><input type="text" id="c-clave-nueva" autocomplete="off" autocapitalize="off" minlength="6"></label>
       <button type="button" class="btn ghost" data-act="clave-gen">Generar</button><button type="button" class="btn" data-act="clave-set" data-id="${esc(id)}">Cambiar clave</button></div>
       <p id="c-clave-msg" class="small" style="color:var(--bad,#b42318);margin:4px 0 0;font-weight:600" role="alert" hidden></p>
@@ -1987,6 +1998,13 @@ const ACT = {
       <p class="small muted">Si tiene horas o registros en la app, no se podrá eliminar para no perder los costos de las OT; en ese caso desmárcalo como Activo.</p>
       <label class="f"><span>Para confirmar, escribe TU clave de administrador</span><input type="password" name="clave" id="ud-clave" autocomplete="current-password" required></label>
       <div class="row"><button class="btn danger">Eliminar definitivamente</button><button type="button" class="btn" data-act="close">Cancelar</button></div></form>`); },
+  'usuario-set': el => {
+    if (!isAdmin()) return toast('Solo el administrador puede cambiar usuarios');
+    const nuevo = (document.getElementById('c-usuario-nuevo')?.value || '').trim().toLowerCase(), p = byId(S.d.perfiles, el.dataset.id);
+    if (!/^[a-z0-9._-]{3,30}$/.test(nuevo)) return toast('El usuario debe tener 3 a 30 caracteres: letras, números, punto, guion o guion bajo, sin espacios.');
+    if (nuevo === p?.usuario) return toast('Ese ya es su nombre de usuario');
+    return run(() => DB.cambiarUsuario(el.dataset.id, nuevo), `Usuario cambiado a «${nuevo}». Avísale a ${p?.nombre || 'la persona'} que entre con ese nombre.`);
+  },
   'clave-gen': () => { const A = 'abcdefghjkmnpqrstuvwxyz', N = '23456789', r = n => crypto.getRandomValues(new Uint32Array(n)), pick = (set, v) => set[v % set.length];
     const v = r(8), c = [...Array(5)].map((_, i) => pick(A, v[i])).concat([pick(N, v[5]), pick(N, v[6]), pick(N, v[7])]).sort(() => 0.5 - Math.random()).join('');
     const i = document.getElementById('c-clave-nueva'); i.value = c; document.getElementById('c-clave-msg').hidden = true; i.select(); toast('Clave generada: ' + c + ' · presiona «Cambiar clave» y anótala para entregarla'); },

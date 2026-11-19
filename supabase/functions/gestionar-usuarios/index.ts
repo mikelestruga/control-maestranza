@@ -1,5 +1,6 @@
 // Edge Function "gestionar-usuarios": SOLO el administrador.
 //   { accion: "cambiar_clave", usuario_id, clave }
+//   { accion: "cambiar_usuario", usuario_id, usuario }
 //   { accion: "eliminar",      usuario_id, clave_admin }   (pide la clave del propio administrador)
 // Verifica en el servidor que quien llama es un perfil 'admin' activo.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
@@ -45,6 +46,22 @@ Deno.serve(async (req) => {
       const { error } = await svc.auth.admin.updateUserById(usuario_id, { password: clave });
       if (error) return out({ error: "no_se_pudo", detalle: error.message }, 500);
       await anotar("modificar", { clave: ["(anterior)", "(cambiada por el administrador)"] });
+      return out({ ok: true });
+    }
+
+    // 2a-bis) Cambiar el nombre de usuario con que entra (el correo interno usuario@dominio cambia junto)
+    if (accion === "cambiar_usuario") {
+      const nuevo = String(body.usuario ?? "").trim().toLowerCase();
+      if (!/^[a-z0-9._-]{3,30}$/.test(nuevo)) return out({ error: "usuario_invalido" }, 400);
+      if (nuevo === obj.usuario) return out({ error: "usuario_igual" }, 400);
+      const { data: dup } = await svc.from("perfiles").select("id").eq("usuario", nuevo).maybeSingle();
+      if (dup) return out({ error: "usuario_existe" }, 409);
+      const dominio = Deno.env.get("DOMINIO_USUARIOS") ?? "taller.local";
+      const { error } = await svc.auth.admin.updateUserById(usuario_id, { email: `${nuevo}@${dominio}`, email_confirm: true });
+      if (error) return out({ error: "no_se_pudo", detalle: error.message }, 500);
+      const { error: ep } = await svc.from("perfiles").update({ usuario: nuevo }).eq("id", usuario_id);
+      if (ep) return out({ error: "no_se_pudo", detalle: ep.message }, 500);
+      await anotar("modificar", { usuario: [obj.usuario, nuevo] });
       return out({ ok: true });
     }
 
