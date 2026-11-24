@@ -155,9 +155,22 @@ create table asistencia (
   unique (perfil_id, fecha)
 );
 
+create table destinos (
+  id bigint generated always as identity primary key,
+  tipo text not null check (tipo in ('faena','maestranza')),
+  nombre text not null,
+  contrato text,
+  activo boolean not null default true,
+  creado timestamptz not null default now(),
+  registrado_por uuid default auth.uid()
+);
+create unique index destinos_unico on destinos (tipo, lower(nombre), lower(coalesce(contrato, '')));
+insert into destinos (tipo, nombre) values ('maestranza', 'Maestranza (uso interno)');
+
 create table consumos (
   id bigint generated always as identity primary key,
-  ot_id bigint not null references ots(id),
+  ot_id bigint references ots(id),
+  destino_id bigint references destinos(id),
   material_id bigint references materiales(id),
   descripcion text,
   cantidad numeric not null check (cantidad > 0),
@@ -173,9 +186,11 @@ create table consumos (
   registrado_por uuid references perfiles(id) default auth.uid(),
   creado timestamptz not null default now(),
   total numeric generated always as (coalesce(cantidad * costo_unit, 0)) stored,
-  check (material_id is not null or descripcion is not null)
+  check (material_id is not null or descripcion is not null),
+  constraint consumos_ot_o_destino check (num_nonnulls(ot_id, destino_id) = 1)
 );
 create index on consumos (ot_id);
+create index on consumos (destino_id);
 
 create table servicios (
   id bigint generated always as identity primary key,
@@ -1009,7 +1024,9 @@ begin
   elsif t in ('consumos','servicios') then
     x := coalesce(r->>'descripcion', (select nombre from materiales where id = (r->>'material_id')::bigint),
                   (select nombre from procesos where id = (r->>'proceso_id')::bigint), '')
-         || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
+         || coalesce(' · OT ' || (select numero from ots where id = (r->>'ot_id')::bigint), '')
+         || coalesce(' · ' || (select tipo || ' ' || nombre || coalesce(' / ' || contrato, '') from destinos where id = (r->>'destino_id')::bigint), '');
+  elsif t = 'destinos' then x := coalesce(r->>'nombre','') || coalesce(' / ' || (r->>'contrato'), '');
   elsif t = 'stock_ingresos' then x := coalesce((select nombre from materiales where id = (r->>'material_id')::bigint), '?') || ' · ' || coalesce(r->>'cantidad','') || ' un';
   elsif t = 'ot_stock' then x := coalesce(r->>'descripcion','') || ' · OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?');
   elsif t = 'compras' then x := coalesce(r->>'numero','s/n') || ' · ' || coalesce(r->>'proveedor','') || ' · ' || case when r->>'ot_id' is null then 'Bodega' else 'OT ' || coalesce((select numero from ots where id = (r->>'ot_id')::bigint), '?') end;
@@ -1053,7 +1070,7 @@ begin
     when 'ots' then 'Órdenes de trabajo' when 'ot_ppto' then 'Órdenes de trabajo' when 'produccion' then 'Órdenes de trabajo' when 'ot_items' then 'Órdenes de trabajo'
     when 'hh_registros' then 'Horas hombre' when 'asistencia' then 'Horas hombre'
     when 'materiales' then 'Materiales'
-    when 'consumos' then 'Bodega' when 'stock_ingresos' then 'Bodega' when 'ot_stock' then 'Bodega'
+    when 'consumos' then 'Bodega' when 'destinos' then 'Bodega' when 'stock_ingresos' then 'Bodega' when 'ot_stock' then 'Bodega'
     when 'compras' then 'Compras y documentos' when 'documentos' then 'Compras y documentos' when 'oc_lineas' then 'Compras y documentos'
     when 'servicios' then 'Pintura y servicios'
     when 'maquina_uso' then 'Máquinas'
@@ -1102,3 +1119,14 @@ insert into procesos (nombre, tipo, unidad, costo_unit, estimada) values
   ('Pintura epóxica', 'pintura', 'm²', 6500, true),
   ('Arenado SA 2½',   'pintura', 'm²', 4200, true),
   ('Tratamiento térmico', 'tratamiento_termico', 'kg', 650, true);
+
+-- Destinos de las salidas de bodega (faena con contrato / maestranza)
+alter table destinos enable row level security;
+drop policy if exists dest_leer on destinos; drop policy if exists dest_crear on destinos; drop policy if exists dest_mod on destinos;
+create policy dest_leer  on destinos for select to authenticated using (mi_rol() in ('bodega','jefe','gerencia','admin'));
+create policy dest_crear on destinos for insert to authenticated with check (mi_rol() in ('bodega','jefe','gerencia','admin') and tipo = 'faena');
+create policy dest_mod   on destinos for all    to authenticated using (mi_rol() in ('admin','gerencia')) with check (mi_rol() in ('admin','gerencia'));
+revoke all on destinos from anon, authenticated;
+grant select, insert, update, delete on destinos to authenticated;
+drop trigger if exists zz_auditar on destinos;
+create trigger zz_auditar after insert or update or delete on destinos for each row execute function auditar('todo');

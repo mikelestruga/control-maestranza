@@ -236,7 +236,7 @@ const COL = {directa: 'var(--accent)', retrabajo: 'var(--bad)', indirecta: 'var(
 const S = {
   me: null, tab: null, demoAs: null,
   d: {config: [], tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [],
-      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], oc_lineas: []},
+      ots: [], ot_ppto: [], hh: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: [], produccion: [], compras: [], ot_stock: [], documentos: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], oc_lineas: [], destinos: []},
   ui: {valFecha: null, otFiltro: 'activas', bodTab: 'consumo', stockOt: null, repDesde: null, repHasta: null, ajTab: 'trabajadores'}
 };
 const cfg = k => +(S.d.config.find(c => c.clave === k)?.valor ?? ({gg_pct: 18, jornada_horas: 8, colacion_min: 60})[k]);
@@ -247,6 +247,9 @@ const puedeCatMat = () => ['admin', 'gerencia', 'bodega'].includes(role());   //
 const isJefe = () => ['jefe', 'gerencia', 'admin'].includes(role());
 const perfil = id => byId(S.d.perfiles, id);
 const otOf = id => byId(S.d.ots, id);
+const destTxt = d => !d ? '' : d.tipo === 'maestranza' ? d.nombre : d.nombre + (d.contrato ? ' · ' + d.contrato : '');
+const destDe = x => x.ot_id ? 'OT ' + (otOf(x.ot_id)?.numero ?? '?') : destTxt(byId(S.d.destinos, x.destino_id)) || '—';
+const faenasAct = () => S.d.destinos.filter(d => d.tipo === 'faena' && d.activo).sort((a, b) => destTxt(a).localeCompare(destTxt(b)));
 const opOf = id => byId(S.d.operaciones, id);
 const closed = r => !!(r.fin || r.manual);
 
@@ -275,11 +278,11 @@ const pesoTxt = b => !b ? '' : b > 1048576 ? num(b / 1048576, 1) + ' MB' : num(b
 /* ---------------------------------------------------------------- registro de cambios (auditoría) */
 const AUD = {
   seccion: {ots: 'Órdenes de trabajo', ot_items: 'Órdenes de trabajo', tipos_item: 'Costos y tarifas', ot_ppto: 'Órdenes de trabajo', produccion: 'Órdenes de trabajo', hh_registros: 'Horas hombre', asistencia: 'Horas hombre',
-    materiales: 'Materiales', consumos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', oc_lineas: 'Compras y documentos', documentos: 'Compras y documentos',
+    materiales: 'Materiales', consumos: 'Bodega', destinos: 'Bodega', stock_ingresos: 'Bodega', ot_stock: 'Bodega', compras: 'Compras y documentos', oc_lineas: 'Compras y documentos', documentos: 'Compras y documentos',
     servicios: 'Pintura y servicios', maquina_uso: 'Máquinas', tarifas: 'Costos y tarifas', maquinas: 'Costos y tarifas', procesos: 'Costos y tarifas', perfiles: 'Trabajadores'},
-  modo: {ots: 'todo', ot_items: 'todo', tipos_item: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', stock_ingresos: 'todo', ot_stock: 'cambios',
+  modo: {ots: 'todo', ot_items: 'todo', tipos_item: 'todo', ot_ppto: 'todo', produccion: 'todo', hh_registros: 'cambios', asistencia: 'cambios', materiales: 'todo', consumos: 'cambios', destinos: 'todo', stock_ingresos: 'todo', ot_stock: 'cambios',
     compras: 'todo', oc_lineas: 'cambios', documentos: 'todo', maquina_uso: 'todo', servicios: 'cambios', tarifas: 'todo', maquinas: 'todo', procesos: 'todo', perfiles: 'cambios', config: 'todo', operaciones: 'todo', dias_especiales: 'todo'},
-  nombre: {ots: 'OT', tipos_item: 'tipo de trabajo', ot_items: 'ítem de OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material',
+  nombre: {ots: 'OT', tipos_item: 'tipo de trabajo', ot_items: 'ítem de OT', ot_ppto: 'cotización', produccion: 'producción', hh_registros: 'registro de horas', asistencia: 'asistencia', materiales: 'material', consumos: 'salida de material', destinos: 'destino de salidas',
     stock_ingresos: 'ingreso a bodega', ot_stock: 'línea de stock de OT', compras: 'compra', oc_lineas: 'línea de OC', documentos: 'documento', servicios: 'servicio', maquina_uso: 'horas de máquina', tarifas: 'tarifa HH', maquinas: 'máquina',
     procesos: 'proceso propio', perfiles: 'trabajador', config: 'parámetro', operaciones: 'operación', dias_especiales: 'feriado'},
   agregar: ['materiales', 'stock_ingresos', 'compras', 'documentos', 'ot_stock', 'maquina_uso', 'ot_items'],
@@ -301,7 +304,8 @@ function audDet(t, r) {
     case 'config': return r.clave;
     case 'perfiles': return `${r.nombre} (${r.usuario || ''})`;
     case 'hh_registros': case 'asistencia': return `${T_.perfiles.find(x => x.id === r.perfil_id)?.nombre || '?'} · ${r.fecha || ''}${r.ot_id ? ' · OT ' + o(r.ot_id) : ''}`;
-    case 'consumos': case 'servicios': return `${r.descripcion || T_.materiales.find(x => x.id === r.material_id)?.nombre || T_.procesos.find(x => x.id === r.proceso_id)?.nombre || ''} · OT ${o(r.ot_id)}`;
+    case 'consumos': case 'servicios': return `${r.descripcion || T_.materiales.find(x => x.id === r.material_id)?.nombre || T_.procesos.find(x => x.id === r.proceso_id)?.nombre || ''}${r.ot_id ? ' · OT ' + o(r.ot_id) : ' · ' + (T_.destinos.find(x => x.id === r.destino_id)?.nombre || 'destino')}`;
+    case 'destinos': return r.nombre + (r.contrato ? ' / ' + r.contrato : '');
     case 'stock_ingresos': return `${T_.materiales.find(x => x.id === r.material_id)?.nombre || '?'} · ${r.cantidad} un`;
     case 'ot_stock': return `${r.descripcion} · OT ${o(r.ot_id)}`;
     case 'compras': return `${r.numero || 's/n'} · ${r.proveedor || ''} · ${r.ot_id ? 'OT ' + o(r.ot_id) : 'Bodega'}`;
@@ -351,6 +355,7 @@ const Demo = (() => {
     maquina_uso: () => ({fecha: hoy(), nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
     produccion: () => ({fecha: hoy(), piezas: 0, nota: null, registrado_por: S.me.id, creado: new Date().toISOString()}),
     materiales: () => ({stock: 0, stock_min: 0, activo: true, costo_estimado: false, unidad: 'un', kg_unidad: null, grupo: null}),
+    destinos: () => ({tipo: 'faena', activo: true, contrato: null}),
     perfiles: () => ({rol: 'operario', activo: true}),
     maquinas: () => ({activa: true, estimada: false, costo_hh: 0}),
     operaciones: () => ({activa: true}),
@@ -448,7 +453,7 @@ const Demo = (() => {
   }
   const api = {
     get ready() { return !!T; },
-    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 15) { T = seed(); save(); } },
+    init() { try { T = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { T = null; } if (!T || T._v !== 16) { T = seed(); save(); } },
     reset() { T = seed(); save(); },
     async load() {
       const c = new Map(T.hh_costo.map(x => [x.registro_id, x]));
@@ -511,7 +516,7 @@ const Demo = (() => {
   };
   /* ---------- datos de ejemplo */
   function seed() {
-    T = {_v: 15, _seq: {}, auditoria: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], oc_lineas: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
+    T = {_v: 16, _seq: {}, auditoria: [], destinos: [], maquina_uso: [], ot_items: [], tipos_item: [], tipos_item_hist: [], oc_lineas: [], produccion: [], compras: [], ot_stock: [], documentos: [], config: [{clave: 'gg_pct', valor: 18}, {clave: 'jornada_horas', valor: 8}, {clave: 'colacion_min', valor: 60}],
       tarifas: [], perfiles: [], operaciones: [], maquinas: [], procesos: [], materiales: [], dias_especiales: [], ots: [], ot_ppto: [],
       hh_registros: [], hh_costo: [], asistencia: [], consumos: [], servicios: [], stock_ingresos: []};
     const add = (t, rows) => rows.map(r => { const x = {...(defaults[t]?.() || {}), ...r}; if (pk(t) === 'id' && x.id == null) x.id = nid(t); T[t].push(x); return x; });
@@ -636,6 +641,10 @@ const Demo = (() => {
     [[A, 1, 535, 5], [A, 2, 642, 6], [A, 3, 428, 4], [A, 4, 749, 7], [A, 5, 535, 5], [A, 6, 321, 3],
      [C, 3, 25, 2], [C, 5, 37.5, 3], [D, 0, 360, 30], [D, 1, 360, 30]].forEach(([ot, di, k, pz]) => {
       T.produccion.push({...defaults.produccion(), id: nid('produccion'), ot_id: ot.id, fecha: wd[di], kg: k, piezas: pz, registrado_por: 'p-jefe'}); });
+    // salidas a faenas (con contrato) y a la maestranza
+    const dst = add('destinos', [{tipo: 'maestranza', nombre: 'Maestranza (uso interno)'}, {tipo: 'faena', nombre: 'Mantos Blancos', contrato: 'CT-4500123'}, {tipo: 'faena', nombre: 'Lomas Bayas', contrato: 'Servicio Mantenimiento Plantas'}]);
+    [[dst[1], 'EL-6011', 10], [dst[0], 'DI-4', 12], [dst[2], 'EL-7018', 5]].forEach(([d, c, q], i) => { const r = {...defaults.consumos(), id: nid('consumos'), ot_id: null, destino_id: d.id, material_id: M(c), cantidad: q, fecha: wd[i], registrado_por: 'p-bod'};
+      before('consumos', r, null); T.consumos.push(r); after('consumos', r, 'INSERT'); });
     T.ots.forEach(o => totProd(o.id));
     S.me = saveMe;
     return T;
@@ -654,8 +663,8 @@ const Cloud = (() => {
     get sb() { return sb; },
     async load() {
       const desde = addDays(hoy(), -62);
-      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist', 'oc_lineas'];
-      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist', 'oc_lineas']; // toleran que falte la migración
+      const simple = ['config', 'tarifas', 'perfiles', 'operaciones', 'maquinas', 'procesos', 'materiales', 'dias_especiales', 'ots', 'ot_ppto', 'consumos', 'servicios', 'produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist', 'oc_lineas', 'destinos'];
+      const opc = ['produccion', 'compras', 'ot_stock', 'documentos', 'maquina_uso', 'ot_items', 'tipos_item', 'tipos_item_hist', 'oc_lineas', 'destinos']; // toleran que falte la migración
       const res = await Promise.all(simple.map(t => { const q = all(() => sb.from(t).select('*').order(PK[t] || 'id')); return opc.includes(t) ? q.catch(() => []) : q; }));
       const out = {}; simple.forEach((t, i) => out[t] = res[i]);
       const activas = out.ots.filter(o => o.estado !== 'entregada').map(o => o.id);
@@ -835,6 +844,7 @@ const TABS = {
   admin: [['resumen', 'Resumen'], ['ots', 'Órdenes de trabajo'], ['validar', 'Validar horas'], ['servicios', 'Pintura y servicios'], ['bodega', 'Bodega'], ['reportes', 'Reportes'], ['cambios', 'Cambios'], ['ajustes', 'Ajustes'], ['dia', 'Mi día']]
 };
 function render() {
+  formSucio = false;
   const app = document.getElementById('app');
   if (!S.me) { app.innerHTML = vLogin(); return; }
   if (!S.me.activo && !DEMO) { app.innerHTML = vInactivo(); return; }
@@ -1292,9 +1302,31 @@ function sheetServicio(otId) {
 }
 
 /* ---------------- BODEGA */
+function vDestinos() {
+  const vc = verCostos() || role() === 'bodega', per = S.ui.destPer || 'mes', sel = S.ui.destSel || 'todos';
+  const desde = per === 'mes' ? hoy().slice(0, 8) + '01' : per === '3m' ? addDays(hoy(), -90) : '0000-00-00';
+  const cs = S.d.consumos.filter(x => x.fecha >= desde);
+  const clave = x => x.ot_id ? 'ot' : 'd' + x.destino_id;
+  const por = {};
+  cs.forEach(x => { const k = clave(x), e = por[k] = por[k] || {n: 0, kg: 0, total: 0, sinc: 0}; e.n++; e.kg += +x.kg || 0; e.total += +x.total || 0; if (x.estado_costo === 'pendiente') e.sinc++; });
+  const nombre = k => k === 'ot' ? 'Órdenes de trabajo (todas)' : (() => { const d = byId(S.d.destinos, +k.slice(1)); return d ? (d.tipo === 'maestranza' ? '🏭 ' : '⛏ ') + destTxt(d) : 'Destino eliminado'; })();
+  const filas = Object.entries(por).sort((a, b) => b[1].total - a[1].total || b[1].n - a[1].n);
+  const det = cs.filter(x => sel === 'todos' || clave(x) === sel).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id).slice(0, 80);
+  const perBtn = [['mes', 'Este mes'], ['3m', 'Últimos 3 meses'], ['todo', 'Todo']].map(([k, l]) => `<button data-act="dest-per" data-k="${k}" aria-pressed="${per === k}">${l}</button>`).join('');
+  return `<div class="card"><div class="row between"><h2>Salidas por destino</h2><button class="btn" data-act="csv-dest">Exportar</button></div>
+    <div class="seg" style="max-width:420px;margin-bottom:10px">${perBtn}</div>
+    <p class="small muted">A dónde fue el material: a cada OT, a una faena (con su contrato) o a la maestranza. Las faenas nuevas se agregan desde la pantalla Salida.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Destino</th><th class="n">Salidas</th><th class="n">Kg</th>${vc ? '<th class="n">Costo</th>' : ''}</tr></thead><tbody>
+    ${filas.map(([k, e]) => `<tr><td style="white-space:normal">${esc(nombre(k))}${e.sinc ? ` <span class="chip warn">${e.sinc} sin costo</span>` : ''}</td><td class="n">${e.n}</td><td class="n">${e.kg ? num(e.kg, 0) : '—'}</td>${vc ? `<td class="n">${clp(e.total)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="4" class="muted">Sin salidas en el período.</td></tr>`}
+    </tbody></table></div></div>
+    <div class="card"><div class="row between"><h2>Detalle</h2><select data-input="dest-sel" style="max-width:260px"><option value="todos">Todos los destinos</option>${filas.map(([k]) => `<option value="${k}"${sel === k ? ' selected' : ''}>${esc(nombre(k))}</option>`).join('')}</select></div>
+    <div class="list">${det.map(x => { const m = byId(S.d.materiales, x.material_id);
+      return `<div class="item"><div class="t"><span class="ot">${esc(destDe(x))}</span> ${esc(x.descripcion || m?.nombre || x.grupo || '')}<div class="small muted">${fechaTxt(x.fecha)}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}${perfil(x.registrado_por) ? ' · ' + esc(perfil(x.registrado_por).nombre) : ''}</div></div>
+      <div style="text-align:right"><strong>${num(x.cantidad, 2)} ${esc(x.unidad || m?.unidad || '')}</strong>${x.kg != null && String(x.unidad).toLowerCase() !== 'kg' ? `<div class="tiny muted">${kg(x.kg)}</div>` : ''}</div></div>`; }).join('') || '<div class="empty">Sin movimientos.</div>'}</div></div>`;
+}
 function vBodega() {
   const t = S.ui.bodTab, bajo = S.d.materiales.filter(m => m.activo && +m.stock <= +m.stock_min);
-  const tabsH = `<div class="seg" style="max-width:640px">${[['consumo', 'Salida a OT'], ['stockot', 'Stock por OT'], ['ingreso', 'Ingreso'], ['compras', `Compras${ocPend().length ? ` (${ocPend().length} por recibir)` : ''}`], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
+  const tabsH = `<div class="seg" style="max-width:640px">${[['consumo', 'Salida'], ['stockot', 'Stock por OT'], ['destinos', 'Destinos'], ['ingreso', 'Ingreso'], ['compras', `Compras${ocPend().length ? ` (${ocPend().length} por recibir)` : ''}`], ['stock', `Stock${bajo.length ? ` (${bajo.length} bajo mínimo)` : ''}`]].map(([k, l]) => `<button data-act="bod-tab" data-k="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
   const mats = S.d.materiales.filter(m => m.activo);
   const opt = m => `<option value="${m.id}">${esc(m.codigo ? m.codigo + ' · ' : '')}${esc(m.nombre)} — ${num(m.stock, 2)} ${esc(m.unidad)}</option>`;
   const matOptions = conGrupo => grupos().map(g => { const gi = grupoInfo(g);
@@ -1302,12 +1334,19 @@ function vBodega() {
     + (mats.some(m => !m.grupo) ? `<optgroup label="Sin grupo">${mats.filter(m => !m.grupo).map(opt).join('')}</optgroup>` : '');
   let body = '';
   if (t === 'stockot') body = vStockOT();
+  else if (t === 'destinos') body = vDestinos();
   else if (t === 'compras') body = vComprasBodega();
   else if (t === 'consumo') {
     const rec = [...S.d.consumos].sort((a, b) => b.id - a.id).slice(0, 25);
-    body = `<div class="grid2"><form class="card" data-form="consumo"><h2>Salida de material a una OT</h2>
-      <label class="f"><span>OT</span><select name="ot" id="cs-ot" required><option value="">Elegir…</option>${S.d.ots.filter(o => o.estado !== 'entregada').map(o => `<option value="${o.id}">${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
-      <div class="seg" role="group"><button type="button" data-act="cs-modo" data-k="bodega" aria-pressed="true">Desde bodega</button><button type="button" data-act="cs-modo" data-k="compra_directa" aria-pressed="false">Compra directa a la OT</button></div>
+    body = `<div class="grid2"><form class="card" data-form="consumo"><h2>Salida de material</h2>
+      <div class="f"><span>¿A dónde va?</span><div class="seg" role="group"><button type="button" data-act="cs-dest" data-k="ot" aria-pressed="true">A una OT</button><button type="button" data-act="cs-dest" data-k="faena" aria-pressed="false">A una faena</button><button type="button" data-act="cs-dest" data-k="maestranza" aria-pressed="false">A la maestranza</button></div></div>
+      <input type="hidden" name="dest" id="cs-dest" value="ot">
+      <div id="cs-d-faena" hidden><label class="f"><span>Faena y contrato</span><select name="faena" id="cs-faena" data-input="cs-faena"><option value="">Elegir…</option>${faenasAct().map(d => `<option value="${d.id}">${esc(destTxt(d))}</option>`).join('')}<option value="nueva">+ Agregar faena o contrato nuevo…</option></select></label>
+        <div id="cs-d-nueva" hidden class="fgrid"><label class="f"><span>Nombre de la faena</span><input type="text" name="fnom" id="cs-fnom" list="cs-fnoms" autocomplete="off"><datalist id="cs-fnoms">${[...new Set(faenasAct().map(d => d.nombre))].map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
+          <label class="f"><span>Contrato (N° o nombre)</span><input type="text" name="fcon" id="cs-fcon" autocomplete="off"></label></div></div>
+      <p id="cs-d-mae" class="small muted" hidden>Salida para uso interno de la maestranza: descuenta el stock y no se carga a ninguna OT.</p>
+      <label class="f" id="cs-d-ot"><span>OT</span><select name="ot" id="cs-ot"><option value="">Elegir…</option>${S.d.ots.filter(o => o.estado !== 'entregada').map(o => `<option value="${o.id}">${esc(o.numero)} · ${esc(o.descripcion || o.cliente)}</option>`).join('')}</select></label>
+      <div class="seg" role="group" id="cs-oseg"><button type="button" data-act="cs-modo" data-k="bodega" aria-pressed="true">Desde bodega</button><button type="button" data-act="cs-modo" data-k="compra_directa" aria-pressed="false">Compra directa a la OT</button></div>
       <input type="hidden" name="origen" id="cs-origen" value="bodega">
       <div id="cs-bod" class="f"><span>Material</span><input type="search" id="cs-buscar" placeholder="Buscar por código o nombre" data-input="cs-buscar"><select name="mat" id="cs-mat" size="7">${matOptions(true)}</select>
         <span class="tiny muted">Elige un tamaño, o el grupo completo si no importa cuál: se valoriza al precio promedio del grupo.</span></div>
@@ -1318,7 +1357,7 @@ function vBodega() {
         <label class="f"><span>Kg <span id="cs-kgh" class="tiny"></span></span><input type="number" name="kg" id="cs-kg" min="0" step="any" inputmode="decimal" placeholder="Se calcula solo"></label>
         <label class="f"><span>Guía / OC / factura</span><input type="text" name="doc" id="cs-doc"></label></div>
       <button class="btn pri xl">Registrar salida</button></form>
-      <div class="card"><h2>Últimos movimientos</h2><div class="list">${rec.map(x => `<div class="item"><div class="t"><span class="ot">${esc(otOf(x.ot_id)?.numero)}</span> ${esc(x.descripcion)}<div class="small muted">${fechaTxt(x.fecha)} · ${({bodega: 'bodega', compra_directa: 'compra directa', stock_ot: 'stock de la OT'})[x.origen]}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div>
+      <div class="card"><h2>Últimos movimientos</h2><div class="list">${rec.map(x => `<div class="item"><div class="t"><span class="ot">${esc(destDe(x))}</span> ${esc(x.descripcion || byId(S.d.materiales, x.material_id)?.nombre || x.grupo || '')}<div class="small muted">${fechaTxt(x.fecha)} · ${({bodega: 'bodega', compra_directa: 'compra directa', stock_ot: 'stock de la OT'})[x.origen]}${x.doc_ref ? ' · ' + esc(x.doc_ref) : ''}</div></div>
         <div style="text-align:right"><strong>${num(x.cantidad, 2)} ${esc(x.unidad || '')}</strong>${x.kg != null && String(x.unidad).toLowerCase() !== 'kg' ? `<div class="tiny muted">${kg(x.kg)}</div>` : ''}${x.estado_costo === 'pendiente' ? '<div><span class="chip warn">sin costo</span></div>' : ''}</div></div>`).join('') || '<div class="empty">Sin movimientos.</div>'}</div></div></div>`;
   } else if (t === 'ingreso') {
     const rec = [...S.d.stock_ingresos].sort((a, b) => b.id - a.id).slice(0, 25);
@@ -1695,7 +1734,7 @@ function vResumen() {
   const kgDia = dias7.map(f => [f, kgEn(f, f)]), maxDia = Math.max(1, ...kgDia.map(x => x[1]));
   const kgCotAct = sum(cs, x => x.c.kgCot), kgProdAct = sum(cs, x => x.c.kgProd);
   const kgIngMes = sum(S.d.stock_ingresos.filter(x => x.fecha >= mes0), x => x.kg), kgCompMes = sum(S.d.consumos.filter(x => x.fecha >= mes0 && x.origen === 'compra_directa'), x => x.kg);
-  const kgEntMes = sum(S.d.consumos.filter(x => x.fecha >= mes0), x => x.kg), kgMatAct = sum(cs, x => x.c.kgMat);
+  const kgEntMes = sum(S.d.consumos.filter(x => x.fecha >= mes0 && x.ot_id), x => x.kg), kgMatAct = sum(cs, x => x.c.kgMat);
   return `
   <div class="row between"><div><div class="label">${fechaTxt(hoy())}</div><h1>Resumen del taller</h1></div><span class="chip run"><span class="dot"></span> ${trabajando} personas trabajando ahora</span></div>
   <div class="grid2">
@@ -1770,7 +1809,7 @@ function vReportes() {
     <p class="small muted">Productividad: ${pct(T('directa') / (T('total') || 1) * 100)} de las horas fueron directas en OT. Retrabajo ${pct(T('retrabajo') / (T('total') || 1) * 100)}.</p></div>
   ${(() => { const ps = S.d.produccion.filter(x => x.fecha >= d && x.fecha <= h); const por = {}; ps.forEach(x => por[x.ot_id] = (por[x.ot_id] || 0) + +x.kg);
     const hhD = sum(S.d.hh.filter(r => r.fecha >= d && r.fecha <= h && closed(r) && (r.tipo === 'directa' || r.tipo === 'retrabajo')), r => r.horas), tk = sum(ps, x => x.kg);
-    const kIng = sum(S.d.stock_ingresos.filter(x => x.fecha >= d && x.fecha <= h), x => x.kg), kEnt = sum(S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h), x => x.kg), kDir = sum(S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h && x.origen === 'compra_directa'), x => x.kg);
+    const kIng = sum(S.d.stock_ingresos.filter(x => x.fecha >= d && x.fecha <= h), x => x.kg), kEnt = sum(S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h && x.ot_id), x => x.kg), kDir = sum(S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h && x.origen === 'compra_directa'), x => x.kg);
     return `<div class="card"><div class="row between"><h2>Producción del período</h2><button class="btn" data-act="csv-prod">Exportar</button></div>
       <div class="row" style="gap:28px"><div><div class="label">Kg producidos</div><div class="big">${kg(tk)}</div></div><div><div class="label">HH directas por kg</div><div class="big">${tk ? num(hhD / tk, 3) : '—'}</div></div>
         <div><div class="label">Material ingresado a bodega</div><div class="big">${kg(kIng)}</div></div><div><div class="label">Material entregado a OT</div><div class="big">${kg(kEnt)}</div><div class="small muted">${kDir ? `${kg(kDir)} compra directa` : ''}</div></div></div>
@@ -2083,13 +2122,23 @@ const ACT = {
   'prod-del': el => { const x = byId(S.d.produccion, +el.dataset.id); openModal('Eliminar registro de producción', `<p>¿Eliminar ${kg(x.kg)} del ${fechaTxt(x.fecha)}? Se descuentan del total de la OT.</p><div class="row"><button class="btn danger" data-act="prod-del-ok" data-id="${x.id}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`); },
   'prod-del-ok': el => run(() => DB.del('produccion', +el.dataset.id), 'Registro eliminado'),
   'csv-grupos': () => { const {d, h} = repData(); csv(`materiales-por-grupo-${d}-a-${h}.csv`, ['Fecha', 'OT', 'Grupo', 'Material', 'Origen', 'Cantidad', 'Unidad', 'Kg', 'Costo unitario', 'Total', 'Estado costo'],
-    S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h).map(x => { const m = byId(S.d.materiales, x.material_id); return [x.fecha, otOf(x.ot_id)?.numero, x.grupo || m?.grupo || '', x.descripcion, x.origen, +x.cantidad, x.unidad, x.kg ?? '', x.costo_unit ?? '', +x.total || 0, x.estado_costo]; })); },
+    S.d.consumos.filter(x => x.fecha >= d && x.fecha <= h).map(x => { const m = byId(S.d.materiales, x.material_id); return [x.fecha, destDe(x), x.grupo || m?.grupo || '', x.descripcion, x.origen, +x.cantidad, x.unidad, x.kg ?? '', x.costo_unit ?? '', +x.total || 0, x.estado_costo]; })); },
   'csv-prod': () => { const {d, h} = repData(); csv(`produccion-${d}-a-${h}.csv`, ['Fecha', 'OT', 'Cliente', 'Descripción', 'Kg', 'Piezas', 'Nota', 'Registrado por'],
     S.d.produccion.filter(x => x.fecha >= d && x.fecha <= h).sort((a, b) => a.fecha.localeCompare(b.fecha)).map(x => { const o = otOf(x.ot_id); return [x.fecha, o?.numero, o?.cliente, o?.descripcion || '', +x.kg, +x.piezas, x.nota || '', perfil(x.registrado_por)?.nombre || '']; })); },
   'sv-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const ext = el.dataset.k === 'externo';
     document.getElementById('sv-modo').value = el.dataset.k; document.getElementById('sv-prop').hidden = ext; document.getElementById('sv-ext').hidden = !ext; },
   'cs-modo': el => { el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el)); const d = el.dataset.k === 'compra_directa';
     document.getElementById('cs-origen').value = el.dataset.k; document.getElementById('cs-bod').hidden = d; document.getElementById('cs-dir').hidden = !d; kgHint(); },
+  'cs-dest': el => { const k = el.dataset.k, g = id => document.getElementById(id);
+    el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el));
+    g('cs-dest').value = k; g('cs-d-ot').hidden = k !== 'ot'; g('cs-d-faena').hidden = k !== 'faena'; g('cs-d-mae').hidden = k !== 'maestranza'; g('cs-oseg').hidden = k !== 'ot';
+    if (k !== 'ot') { g('cs-origen').value = 'bodega'; g('cs-bod').hidden = false; g('cs-dir').hidden = true; g('cs-oseg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === 'bodega')); }
+    kgHint(); },
+  'dest-per': el => { S.ui.destPer = el.dataset.k; render(); },
+  'csv-dest': () => { const per = S.ui.destPer || 'mes', desde = per === 'mes' ? hoy().slice(0, 8) + '01' : per === '3m' ? addDays(hoy(), -90) : '0000-00-00';
+    csv(`salidas-por-destino-${hoy()}.csv`, ['Fecha', 'Destino', 'Contrato', 'Material', 'Cantidad', 'Unidad', 'Kg', 'Total', 'Doc'],
+      S.d.consumos.filter(x => x.fecha >= desde).sort((a, b) => a.fecha.localeCompare(b.fecha)).map(x => { const d = byId(S.d.destinos, x.destino_id), m = byId(S.d.materiales, x.material_id);
+        return [x.fecha, x.ot_id ? 'OT ' + (otOf(x.ot_id)?.numero ?? '') : d?.nombre || '', d?.contrato || '', x.descripcion || m?.nombre || x.grupo || '', +x.cantidad, x.unidad || m?.unidad || '', x.kg ?? '', +x.total || 0, x.doc_ref || '']; })); },
   'bod-tab': el => { S.ui.bodTab = el.dataset.k; render(); },
   'costo-edit': el => sheetCosto(el.dataset.t, +el.dataset.id),
   'item-del': el => run(() => DB.del(el.dataset.t, +el.dataset.id), 'Ítem eliminado'),
@@ -2204,8 +2253,19 @@ const FORMS = {
     return run(() => DB.ins('servicios', row), row.costo_unit == null && ext ? 'Registrado. Costo pendiente para administración' : 'Registrado');
   },
   consumo(fd) {
-    const dir = fd.get('origen') === 'compra_directa', cu = fd.get('cu');
-    const row = {ot_id: +fd.get('ot'), cantidad: +fd.get('cant'), origen: fd.get('origen'), doc_ref: fd.get('doc') || null};
+    const dest = fd.get('dest') || 'ot', dir = dest === 'ot' && fd.get('origen') === 'compra_directa', cu = fd.get('cu');
+    const row = {cantidad: +fd.get('cant'), origen: dest === 'ot' ? fd.get('origen') : 'bodega', doc_ref: fd.get('doc') || null};
+    let nueva = null;
+    if (dest === 'ot') { row.ot_id = +fd.get('ot'); if (!row.ot_id) return toast('Elige la OT'); }
+    else if (dest === 'maestranza') { const d = S.d.destinos.find(x => x.tipo === 'maestranza'); if (!d) return toast('Falta el destino Maestranza: ejecuta la migración migracion-destinos.sql'); row.destino_id = d.id; }
+    else {
+      const f = String(fd.get('faena') || ''); if (!f) return toast('Elige la faena');
+      if (f === 'nueva') {
+        const nom = String(fd.get('fnom') || '').trim(), con = String(fd.get('fcon') || '').trim(); if (!nom) return toast('Escribe el nombre de la faena');
+        const ya = S.d.destinos.find(x => x.tipo === 'faena' && x.nombre.trim().toLowerCase() === nom.toLowerCase() && (x.contrato || '').trim().toLowerCase() === con.toLowerCase());
+        if (ya) row.destino_id = ya.id; else nueva = {tipo: 'faena', nombre: nom, contrato: con || null};
+      } else row.destino_id = +f;
+    }
     if (fd.get('kg') !== '') row.kg = +fd.get('kg');
     if (!(row.cantidad > 0)) return toast('Indica la cantidad');
     if (dir) { Object.assign(row, {descripcion: fd.get('desc'), unidad: fd.get('unidad') || 'un', costo_unit: cu === '' ? null : +cu}); if (!row.descripcion) return toast('Describe el material'); }
@@ -2214,7 +2274,7 @@ const FORMS = {
       if (v.startsWith('g:')) { row.grupo = v.slice(2); const gi = grupoInfo(row.grupo); if (gi.stock < row.cantidad) toast(`Ojo: el grupo queda con stock negativo (${num(gi.stock - row.cantidad, 2)} ${gi.unidad})`); }
       else { row.material_id = +v; const m = byId(S.d.materiales, row.material_id); if (+m.stock < row.cantidad) toast(`Ojo: el stock queda negativo (${num(m.stock - row.cantidad, 2)} ${m.unidad})`); }
     }
-    return run(() => DB.ins('consumos', row), 'Salida de material registrada');
+    return run(async () => { if (nueva) row.destino_id = (await DB.ins('destinos', nueva)).id; return DB.ins('consumos', row); }, 'Salida de material registrada');
   },
   ingreso(fd) {
     const cu = fd.get('cu'); const row = {material_id: +fd.get('mat'), cantidad: +fd.get('cant'), costo_unit: cu === '' ? null : +cu, doc_ref: fd.get('doc') || null};
@@ -2377,15 +2437,19 @@ document.addEventListener('input', e => {
   if (!t) { out.textContent = '—'; return; }
   out.innerHTML = `${clp(n * t.costo_hh + x * t.costo_hh_extra)} <span class="small muted">· ${num(n, 2)} h × ${clp(t.costo_hh)} + ${num(x, 2)} h extra × ${clp(t.costo_hh_extra)}</span>`;
 });
-document.addEventListener('change', e => { if (e.target.id === 'cal-t') e.target.dispatchEvent(new Event('input', {bubbles: true})); });
+document.addEventListener('change', e => { if (e.target.dataset?.input === 'cs-faena' || e.target.dataset?.input === 'dest-sel') e.target.dispatchEvent(new Event('input', {bubbles: true})); if (e.target.id === 'cal-t') e.target.dispatchEvent(new Event('input', {bubbles: true})); });
 document.addEventListener('input', e => {
   if (e.target.dataset?.input === 'kg-calc') return kgHint();
   const k = e.target.dataset?.input; if (!k) return;
+  if (k === 'cs-faena') { document.getElementById('cs-d-nueva').hidden = e.target.value !== 'nueva'; return; }
+  if (k === 'dest-sel') { S.ui.destSel = e.target.value; return render(); }
   const sel = document.getElementById(k === 'cs-buscar' ? 'cs-mat' : 'in-mat'), q = e.target.value.toLowerCase();
   [...sel.options].forEach(o => o.hidden = q && !o.textContent.toLowerCase().includes(q));
   const first = [...sel.options].find(o => !o.hidden); if (first && sel.selectedOptions[0]?.hidden !== false) sel.value = first.value; kgHint();
 });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.me && !document.querySelector('.sheet')) reload(); });
+let formSucio = false;
+document.addEventListener('input', e => { if (e.target.closest?.('form')) formSucio = true; });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.me && !document.querySelector('.sheet') && !formSucio) reload(); });
 
 /* ================================================================ ARRANQUE */
 async function afterLogin(user) {
